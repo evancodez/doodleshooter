@@ -27,6 +27,7 @@ export class Player {
     this.dashCd = 0; this.airJumps = 1; this.blockCd = 0; this.landGraceT = 0; this.sprintToggle = false; this.lastGround = true; this.airT = 0; this._sprinting = false; this._aiming = false; this._mv = { x: 0, y: 0 };
     this.grapple = { state: 'idle', anchor: new THREE.Vector3(), hook: new THREE.Vector3(), from: new THREE.Vector3(), flyT: 0, flyDur: 0, len: 0, cd: 0, enemy: null, blockedT: 0, t: 0, swingT: 0 };
     this.deathT = 0; this.gravityScale = 1; this.dashLock = false;
+    this.isLocal = true; this.team = 0; this.name = 'you'; this.grenades = 3; this.maxGrenades = 5; this.nades = []; this.nadeCd = 0; this.firing = false; this.onThrow = null;
     const rm = makeInkMaterial({ ink: INK.BLUE, fill: false, shadeBias: -0.3 });
     this.rope = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 6), rm); this.rope.visible = false; ctx.scene.add(this.rope);
     const hm = makeInkMaterial({ ink: INK.BLUE }); this.hookMesh = new THREE.Group();
@@ -38,8 +39,9 @@ export class Player {
     this.hp = this.maxHp; this.alive = true; this.yaw = 0; this.pitch = 0; this.roll = 0; this.hurtFx = 0; this.flashFx = 0; this.crouching = false; this.sliding = false; this.deathT = 0; this.lastDamageT = 10; this.dashCd = 0; this.airJumps = 1; this.gravityScale = 1; this.dashLock = false;
     this.detachGrapple(false);
     for (const w of this.weapons) if (w.isGun) { w.mag = w.magSize; w.reserve = w.startReserve; w.reloading = false; w.pumpT = 0; }
-    this.switchTo(0, true); this.rig.visible = true; this.eyeH = EYE_STAND;
+    this.switchTo(0, true); this.rig.visible = true; this.eyeH = EYE_STAND; this.grenades = 3; this.clearNades();
   }
+  clearNades() { for (const n of this.nades) this.ctx.scene.remove(n.mesh); this.nades.length = 0; }
   get isBlocking() { return this.weapon.kind === 'katana' && this.weapon.blocking; }
   aimDir(spread = 0) { const d = this.forward.clone(); if (spread > 0) { d.addScaledVector(this.right, rand(-spread, spread)); d.y += rand(-spread, spread); d.normalize(); } return d; }
   recoil(p, y) { this.pitch = clamp(this.pitch + p * 0.55, -1.5, 1.5); this.recoilPitch.kick(p * 22); this.recoilYaw.kick(y * 30); }
@@ -107,7 +109,7 @@ export class Player {
       this.deathT += dt; this.eyeH = damp(this.eyeH, 0.35, 3, dt); this.roll = damp(this.roll, 0.9, 3, dt); this.pitch = damp(this.pitch, -0.35, 3, dt);
       b.vel.x = damp(b.vel.x, 0, 4, dt); b.vel.z = damp(b.vel.z, 0, 4, dt); b.vel.y -= G * dt; ctx.world.moveBody(b, dt);
       this.forward.set(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch)); this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-      this._updateCamera(dt); this.weapon.animate(dt, this._weaponState(false, false, 0)); return;
+      this.updateNades(dt); this._updateCamera(dt); this.weapon.animate(dt, this._weaponState(false, false, 0)); return;
     }
     this.rig.visible = true;
     // ---- look ----
@@ -199,6 +201,10 @@ export class Player {
     this.bobAmt = damp(this.bobAmt, moving ? clamp(hs2 / 7, 0.3, 1.4) : 0, 8, dt);
     if (moving) { this.bobPhase += dt * (7 + hs2 * 0.5); this.stepDist += hs2 * dt; if (this.stepDist > (sprinting ? 2.5 : 2.0)) { this.stepDist = 0; audio.footstep(clamp(hs2 / 8, 0.3, 1)); } }
     this._updateCamera(dt);
+    // ---- grenades ----
+    this.nadeCd -= dt;
+    if (inp.pressed('grenade') && this.grenades > 0 && this.nadeCd <= 0) this.throwGrenade();
+    this.updateNades(dt);
     // ---- weapons ----
     for (let i = 0; i < 5; i++) if (inp.pressed('slot' + (i + 1))) this.switchTo(i);
     if (inp.pressed('nextWeapon')) this.switchTo((this.weaponIndex + 1) % this.weapons.length);
@@ -206,9 +212,62 @@ export class Player {
     const st = this._weaponState(sprinting, aiming, hs2);
     if (inp.pressed('melee') && this.weapon.kind !== 'katana') { this.switchTo(this.katanaIndex); this.returnT = 0.85; this.weapons[this.katanaIndex].startSlash(st); st.meleePressed = false; }
     if (this.returnT > 0) { if (this.weapon.kind === 'katana' && (st.firePressed || st.aim || st.meleePressed)) this.returnT = 0; else { this.returnT -= dt; if (this.returnT <= 0) this.switchTo(this.prevWeaponIndex); } }
+    this.firing = st.fire && this.weapon.isGun;
     this.weapon.animate(dt, st);
     ctx.hud.setAds(this.weapon.isGun && this.weapon.aimAmt > 0.55);
     ctx.hud.setScope(!!this.weapon.scope && this.weapon.aimAmt > 0.62);
+  }
+  // ---- grenades: a lobbed ink bomb with a short fuse and a big orange blast ----
+  throwGrenade(remote = null) {
+    const ctx = this.ctx; let pos, vel;
+    if (remote) { pos = new THREE.Vector3().fromArray(remote.pos); vel = new THREE.Vector3().fromArray(remote.vel); }
+    else {
+      this.grenades--; this.nadeCd = 0.55;
+      pos = this.eye.clone().addScaledVector(this.right, 0.25).addScaledVector(this.forward, 0.6); pos.y -= 0.15;
+      vel = this.forward.clone().multiplyScalar(17).addScaledVector(this.body.vel, 0.5); vel.y += 4.5;
+      this.weapon.recoil.kick(-0.4, 0.5, 1.2); this.weapon.recoilRot.kick(-3, 0, -1.5); audio.grappleFire(); ctx.input.rumble(0.2, 0.4, 50);
+      if (this.onThrow) this.onThrow({ pos: pos.toArray().map((v) => +v.toFixed(2)), vel: vel.toArray().map((v) => +v.toFixed(2)) });
+    }
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), makeInkMaterial({ ink: INK.BLACK })));
+    const pin = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.02, 4, 8), makeInkMaterial({ ink: INK.ORANGE })); pin.position.y = 0.2; g.add(pin);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 6), makeInkMaterial({ ink: INK.ORANGE })); cap.position.y = 0.17; g.add(cap);
+    g.position.copy(pos); ctx.scene.add(g);
+    this.nades.push({ mesh: g, pos, vel, ang: new THREE.Vector3(rand(-6, 6), rand(-6, 6), rand(-6, 6)), fuse: 2.3, mine: !remote, rest: false, tick: 0 });
+  }
+  updateNades(dt) {
+    const ctx = this.ctx, world = ctx.world;
+    for (let i = this.nades.length - 1; i >= 0; i--) {
+      const n = this.nades[i]; n.fuse -= dt; n.tick += dt;
+      if (!n.rest) {
+        n.vel.y -= 22 * dt; _v2.copy(n.pos); n.pos.addScaledVector(n.vel, dt);
+        _d.subVectors(n.pos, _v2); const len = _d.length();
+        if (len > 1e-6) {
+          _d.divideScalar(len); const hit = world.raycast(_v2, _d, len + 0.16);
+          if (hit) {
+            n.pos.copy(hit.point).addScaledVector(hit.normal, 0.16);
+            const vn = n.vel.dot(hit.normal); if (vn < 0) { n.vel.addScaledVector(hit.normal, -1.45 * vn); n.vel.multiplyScalar(0.55); n.ang.multiplyScalar(0.6); audio.shell(); }
+            if (n.vel.length() < 1.2 && hit.normal.y > 0.5) { n.rest = true; n.vel.set(0, 0, 0); }
+          }
+        }
+        n.mesh.rotation.x += n.ang.x * dt; n.mesh.rotation.y += n.ang.y * dt; n.mesh.rotation.z += n.ang.z * dt;
+        n.mesh.position.copy(n.pos);
+      }
+      // the fuse sparks faster as it runs out
+      if (Math.floor(n.tick * (n.fuse < 0.8 ? 14 : 5)) !== Math.floor((n.tick - dt) * (n.fuse < 0.8 ? 14 : 5))) ctx.effects.strokeBurst(n.pos.clone().add(_v.set(0, 0.22, 0)), INK.ORANGE, 2, 2.5, { life: 0.12, size: 0.02 });
+      if (n.fuse <= 0) { this.explodeNade(n); ctx.scene.remove(n.mesh); this.nades.splice(i, 1); }
+    }
+  }
+  explodeNade(n) {
+    const ctx = this.ctx, R = 5.2, c = n.pos.clone(); c.y += 0.25;
+    ctx.effects.boom(c, R); audio.explosion(c); ctx.input.rumble(0.9, 0.9, 220);
+    // bots: the thrower's client reports the damage (host applies it; a client's report is forwarded)
+    if (n.mine) ctx.enemies.blastEnemies(c, R, 120, null);
+    // me: my own grenade, or anyone else's that went off on my screen
+    const d = this.center.distanceTo(c);
+    if (this.alive && d < R * 0.85) { this.takeDamage(48 * (1 - d / (R * 0.85)), c); this.knockback(_v.subVectors(this.center, c).normalize(), 9); }
+    // other players in a versus match, decided by the thrower only
+    if (n.mine && ctx.targets) for (const t of ctx.targets()) { if (t.isLocal || !t.alive || (ctx.canHurt && !ctx.canHurt(t))) continue; const dd = t.center.distanceTo(c); if (dd < R * 0.85) t.takeDamage(80 * (1 - dd / (R * 0.85)), c); }
   }
   _weaponState(sprinting, aiming, hs) {
     const inp = this.ctx.input, b = this.body;

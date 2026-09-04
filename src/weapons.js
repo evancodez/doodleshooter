@@ -146,7 +146,13 @@ export class Gun extends ViewModel {
   }
   fireRay(origin, dir) {
     const ctx = this.ctx; const hitE = ctx.enemies.raycast(origin, dir, 300), hitW = ctx.world.raycast(origin, dir, 300, SEE_THROUGH); let end, hit = false;
-    if (hitE && (!hitW || hitE.dist < hitW.dist)) {
+    // other players in a versus match are targets too; the closest thing along the ray wins
+    const hitP = ctx.raycastPlayers ? ctx.raycastPlayers(origin, dir, 300) : null;
+    if (hitP && (!hitE || hitP.dist < hitE.dist) && (!hitW || hitP.dist < hitW.dist)) {
+      end = hitP.point; const crit = hitP.part === 'head'; let d = this.damage * (crit ? this.headMul : 1);
+      if (this.falloff) d *= clamp(1 - (hitP.dist - this.falloff[0]) / (this.falloff[1] - this.falloff[0]), this.falloff[2], 1);
+      ctx.hitPlayer(hitP.player, d, { point: hitP.point, dir, part: hitP.part, source: this.kind, crit }); hit = true;
+    } else if (hitE && (!hitW || hitE.dist < hitW.dist)) {
       end = hitE.point; const crit = hitE.part === 'head'; let d = this.damage * (crit ? this.headMul : 1);
       if (this.falloff) d *= clamp(1 - (hitE.dist - this.falloff[0]) / (this.falloff[1] - this.falloff[0]), this.falloff[2], 1);
       ctx.enemies.damage(hitE.enemy, d, { point: hitE.point, dir, part: hitE.part, source: this.kind, crit }); hit = true;
@@ -333,9 +339,9 @@ export class Katana extends ViewModel {
     _v2.copy(P.forward); _v.set(-P.forward.z, 0, P.forward.x).multiplyScalar(s * 0.7); _v2.add(_v).y -= 0.35; _v2.normalize();
     let any = false;
     for (const h of hits) { any = true; const point = h.enemy.center.clone(); point.y += rand(-0.2, 0.4); ctx.enemies.damage(h.enemy, this.damage, { point, dir: _v2.clone(), part: 'torso', source: 'katana', crit: false, slashDir: s }); }
-    const deflected = ctx.enemies.projectiles.deflectArc(P.eye, P.forward, 2.8, Math.cos(1.0), P);
+    if (ctx.playersInArc) for (const t of ctx.playersInArc(P.eye, P.forward, 3.0, Math.cos(0.95))) { any = true; ctx.hitPlayer(t, this.damage, { point: t.center.clone(), dir: _v2.clone(), part: 'torso', source: 'katana', crit: false }); }
+    // a swing only cuts; bullets are turned aside by the raised guard, never by a slash
     if (any) { audio.katanaHit(); ctx.game.hitstop(0.07, 0.12); ctx.effects.shakeAmt += 0.12; ctx.input.rumble(0.7, 0.4, 90); this.recoil.kick(0, 0, 1.5); }
-    else if (deflected) audio.parry();
   }
   onDeflect(perfect) {
     this.parrySwing = 1; this.parryDir = -this.parryDir;

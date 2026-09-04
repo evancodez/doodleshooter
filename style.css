@@ -128,3 +128,33 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 .mapbtn i { font-style: normal; font-size: 14px; opacity: .75; }
 .mapbtn:hover { opacity: .85; }
 .mapbtn.on { opacity: 1; color: var(--paper); background: var(--ink); }
+
+/* grenades */
+.nades { display: inline-flex; gap: 3px; margin-left: 12px; vertical-align: middle; }
+.nades i { width: 13px; height: 15px; border: 2.5px solid var(--ink); border-radius: 50% 50% 45% 45%; display: inline-block; position: relative; top: -2px; }
+.nades i::after { content: ''; position: absolute; left: 3px; top: -6px; width: 3px; height: 5px; background: var(--red); }
+/* lobby + modes */
+.modes { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 10px 0 4px; }
+.modebtn { font: inherit; font-size: 21px; color: var(--ink); background: transparent; border: 2.5px solid var(--ink); border-radius: 7px 10px 6px 9px / 10px 6px 9px 7px; padding: 6px 14px; cursor: pointer; opacity: .6; display: flex; flex-direction: column; align-items: center; line-height: 1.1; transform: rotate(-.5deg); min-width: 130px; }
+.modebtn i { font-style: normal; font-size: 14px; opacity: .8; }
+.modebtn:hover { opacity: .9; } .modebtn.on { opacity: 1; color: var(--paper); background: var(--ink); }
+.lobby { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-top: 8px; }
+.lobby .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.lobby input[type=text] { font: inherit; font-size: 24px; width: 130px; text-align: center; letter-spacing: 4px; text-transform: uppercase; color: var(--ink); border: 2.5px solid var(--ink); border-radius: 6px 9px 6px 8px; background: transparent; padding: 3px 6px; }
+.lobby button, .bigbtn { font: inherit; font-size: 21px; color: var(--paper); background: var(--ink); border: 2.5px solid var(--ink); border-radius: 7px 10px 6px 9px / 10px 6px 9px 7px; padding: 5px 16px; cursor: pointer; transform: rotate(-.6deg); }
+.lobby button.alt { color: var(--ink); background: transparent; }
+.lobby button:disabled { opacity: .4; cursor: default; }
+.code { font-size: 44px; letter-spacing: 8px; color: var(--red); border: 3px dashed var(--red); padding: 2px 18px; border-radius: 10px; }
+.plist { display: flex; flex-direction: column; gap: 3px; min-width: 300px; font-size: 22px; }
+.plist div { display: flex; justify-content: space-between; gap: 18px; border-bottom: 1.5px solid rgba(26,48,192,.25); padding: 2px 8px; }
+.plist .t0 { color: var(--ink); } .plist .t1 { color: var(--red); } .plist .host::after { content: ' (host)'; opacity: .6; font-size: 16px; }
+.status { font-size: 19px; color: var(--red); min-height: 24px; }
+.scoreboard { display: flex; flex-direction: column; gap: 4px; font-size: 24px; min-width: 360px; }
+.scoreboard div { display: flex; justify-content: space-between; gap: 20px; padding: 2px 10px; border-bottom: 1.5px solid rgba(26,48,192,.25); }
+.scoreboard .me { background: rgba(26,48,192,.08); }
+.hud-tr .teamscore { font-size: 26px; } .hud-tr .teamscore b { color: var(--red); }
+.checkpoints { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 8px; font-size: 19px; }
+.checkpoints button { font: inherit; font-size: 19px; color: var(--ink); background: transparent; border: 2px solid var(--ink); border-radius: 6px 8px 5px 7px; padding: 3px 12px; cursor: pointer; }
+.checkpoints button:hover { background: var(--ink); color: var(--paper); }
+.namebox { font: inherit; font-size: 20px; width: 150px; color: var(--ink); border: 2px solid var(--ink); border-radius: 6px 8px 5px 7px; background: transparent; padding: 2px 8px; }
+#hud.pad .kbonly, #hud:not(.pad) .padonly { display: none; }

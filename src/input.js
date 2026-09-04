@@ -5,11 +5,11 @@ const KEYMAP = {
   KeyW: 'forward', KeyS: 'back', KeyA: 'left', KeyD: 'right', ArrowUp: 'forward', ArrowDown: 'back', ArrowLeft: 'left', ArrowRight: 'right',
   Space: 'jump', ShiftLeft: 'sprint', ShiftRight: 'sprint', ControlLeft: 'crouch', KeyC: 'crouch',
   KeyR: 'reload', KeyQ: 'grapple', KeyE: 'grapple', KeyF: 'melee', KeyV: 'melee',
-  Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Escape: 'pause', KeyP: 'pause', Enter: 'confirm', KeyG: 'grapple', KeyX: 'dash', AltLeft: 'dash', KeyM: 'music',
+  Digit1: 'slot1', Digit2: 'slot2', Digit3: 'slot3', Digit4: 'slot4', Digit5: 'slot5', Escape: 'pause', KeyP: 'pause', Enter: 'confirm', KeyG: 'grenade', KeyX: 'dash', AltLeft: 'dash', KeyM: 'music', KeyT: 'talk',
 };
 const MOUSEMAP = { 0: 'fire', 2: 'aim', 1: 'grapple', 3: 'grapple', 4: 'melee' };
 // Standard gamepad mapping (DualSense): 0 cross,1 circle,2 square,3 triangle,4 L1,5 R1,6 L2,7 R2,8 create,9 options,10 L3,11 R3,12-15 dpad
-const PADMAP = { 0: 'jump', 1: 'crouch', 2: 'reload', 3: 'nextWeapon', 4: 'grapple', 5: 'melee', 6: 'aim', 7: 'fire', 9: 'pause', 10: 'sprint', 12: 'reload', 13: 'slot5', 14: 'prevWeapon', 15: 'nextWeapon', 8: 'music', 17: 'confirm' };
+const PADMAP = { 0: 'jump', 1: 'crouch', 2: 'reload', 3: 'nextWeapon', 4: 'grapple', 5: 'melee', 6: 'aim', 7: 'fire', 9: 'pause', 10: 'sprint', 11: 'grenade', 12: 'grenade', 13: 'slot5', 14: 'prevWeapon', 15: 'nextWeapon', 8: 'music', 17: 'confirm' };
 
 export class Input {
   constructor(canvas) {
@@ -23,11 +23,11 @@ export class Input {
     this.usingGamepad = false; this.gamepadIndex = -1; this.padHoldTime = 0;
     this.pointerLocked = false; this.anyInput = false; this.lastPadButtons = [];
     this.onLockChange = null; this.onAnyInput = null;
-    this.invertY = false;
+    this.invertY = false; this.onDeviceChange = null;
 
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
-      const a = KEYMAP[e.code]; if (a) { this.keys[a] = true; this.usingGamepad = false; }
+      const a = KEYMAP[e.code]; if (a) { this.keys[a] = true; if (this.usingGamepad && this.onDeviceChange) this.onDeviceChange(false); this.usingGamepad = false; }
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
       this.anyInput = true;
     });
@@ -42,6 +42,7 @@ export class Input {
     });
     document.addEventListener('mousedown', (e) => {
       const a = MOUSEMAP[e.button]; if (a) this.mouseBtns[a] = true;
+      if (this.usingGamepad && this.onDeviceChange) this.onDeviceChange(false);
       this.usingGamepad = false; this.anyInput = true;
       if (e.button === 1 || e.button === 3 || e.button === 4) e.preventDefault();
     });
@@ -104,7 +105,7 @@ export class Input {
         const pressed = b.pressed || b.value > 0.35;
         if (pressed) { s[PADMAP[idx]] = true; padActive = true; }
       }
-      if (padActive) { this.usingGamepad = true; this.anyInput = true; }
+      if (padActive) { if (!this.usingGamepad && this.onDeviceChange) this.onDeviceChange(true); this.usingGamepad = true; this.anyInput = true; }
       this._pad = pad;
     } else this._pad = null;
 

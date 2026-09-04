@@ -7,7 +7,7 @@ import { rand, choose, TAU } from './util.js';
 
 export const LEVELS = [
   { key: 'district', name: 'DOODLE DISTRICT', blurb: 'streets, rooftops and fire escapes' },
-  { key: 'desk', name: 'THE DESK', blurb: 'two inches tall on somebody\'s desk' },
+  { key: 'canyon', name: 'PAPER CANYON', blurb: 'an ink river, terraced cliffs and a rope bridge' },
 ];
 
 function createBuilder(scene, world) {
@@ -271,6 +271,8 @@ function buildDistrict(B) {
     }
   }
 
+  L.teamSpawns = [[-40, 0, 18], [-34, 12, 12], [-48, 7, -30], [-52, 0, 30], [-30, 7, -48]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  L.teamSpawns = [L.teamSpawns, [[40, 0, 8], [34, 12, 18], [48, 7, -30], [52, 0, 30], [16, 7, -45]].map(([x, y, z]) => new THREE.Vector3(x, y, z))];
   planes(3, 45, 30);
   return B.finish();
 }
@@ -280,200 +282,99 @@ function buildDistrict(B) {
 // scale: an open book whose pages are ramps, keyboard keys you hop between, a mug you spiral up,
 // pen barrels laid as beams, paper clips arching overhead to swing from. Wide open in between,
 // nothing enclosed, and every high place is in the open where anyone can shoot you off it.
-function buildDesk(B) {
-  const { L, box, slab, rail, cyl, sphere, ring, spawn, sniper, pickup, planes, addGeo, collider } = B;
-  L.playerStart.set(0, 0, 36);
-  L.bounds = { minX: -52, maxX: 52, minZ: -52, maxZ: 52 };
+// ============================ map 2: Paper Canyon ============================
+// A gorge cut into the notebook. An ink river runs along the bottom, terraced cliffs step up on
+// both sides (each ledge reachable by cut-in stairs, so enemies climb too), rock spires and a
+// rope bridge give the grapple something to bite, and the top ledges are exposed sniper ground.
+function buildCanyon(B) {
+  const { L, box, slab, stairs, rail, cyl, sphere, ring, spawn, sniper, pickup, planes, addGeo, collider } = B;
+  L.playerStart.set(-2, 0, 9); L.bounds = { minX: -60, maxX: 60, minZ: -60, maxZ: 60 };
+  L.teamSpawns = [[], []];
+  const BK = INK.BLACK, GR = INK.GREEN, OR = INK.ORANGE, PK = INK.PINK;
+  const bush = (x, y, z, s = 1) => { for (let i = 0; i < 3; i++) sphere(x + (i - 1) * 0.55 * s, y + 0.45 * s + (i % 2) * 0.2 * s, z + (i % 2 ? 0.3 : -0.2) * s, (0.5 + (i % 2) * 0.15) * s, { seg: 7, ink: GR }); };
+  const flowers = (x, y, z, n = 4) => { for (let i = 0; i < n; i++) { const fx = x + rand(-1.4, 1.4), fz = z + rand(-1.4, 1.4); box(fx, y, fz, 0.05, 0.42, 0.05, { noCollide: true, ink: GR }); sphere(fx, y + 0.48, fz, 0.13, { seg: 6, ink: PK }); } };
+  const spire = (x, z, baseY, h, w = 2.2, o = {}) => { box(x, baseY, z, w, h * 0.55, w); box(x, baseY + h * 0.55, z, w * 0.72, h * 0.3, w * 0.72); box(x, baseY + h * 0.85, z, w * 0.42, h * 0.15, w * 0.42); ring(x, baseY + h + 0.9, z, 'y'); if (o.mid) ring(x + w * 0.5 + 0.7, baseY + h * 0.5, z, 'x'); };
 
-  // stepped slope: reads as a smooth ramp and is walkable by player and enemies alike
-  function ramp(x, z, dir, len, top, width, o = {}) {
-    // rise per step has to stay well under the navigation grid's clearance floor, otherwise the
-    // tread above reads as a wall and no path is ever generated up the slope
-    const steps = Math.max(4, Math.round(len / 0.55), Math.ceil(top / 0.3));
-    const run = len / steps, rise = top / steps;
-    const dx = dir === '+x' ? 1 : dir === '-x' ? -1 : 0, dz = dir === '+z' ? 1 : dir === '-z' ? -1 : 0;
-    for (let i = 0; i < steps; i++) {
-      const c = (i + 0.5) * run;
-      box(x + dx * c, o.base ?? 0, z + dz * c, dx ? run + 0.006 : width, (i + 1) * rise - (o.base ?? 0), dz ? run + 0.006 : width, o);
-    }
-  }
-  // a flat-topped object with a thin lip; you can stand on it and be seen from everywhere
-  function slab3(x, z, w, d, h, o = {}) { box(x, o.base ?? 0, z, w, h - (o.base ?? 0), d, o); }
-  // long round barrel lying on the ground, walkable along the top
-  function barrel(x, y, z, len, r, axis, ink) {
-    const g = new THREE.CylinderGeometry(r, r, len, 9);
-    if (axis === 'x') g.rotateZ(Math.PI / 2); else g.rotateX(Math.PI / 2);
-    g.translate(x, y + r, z); addGeo(g, ink);
-    collider(x, y, z, axis === 'x' ? len : r * 1.7, r * 2, axis === 'x' ? r * 1.7 : len);
-  }
-  function post(x, z, y0, h, r, ink) { box(x, y0, z, r * 2, h, r * 2, { ink, noNav: true }); }
-  // a wire arch: two uprights and a curved span, used as a swing line
-  function clipArch(x, z, span, h, axis, ink) {
-    const seg = 9, r = 0.19;
-    for (let i = 0; i < seg; i++) {
-      const t0 = i / seg, t1 = (i + 1) / seg;
-      const a0 = Math.PI * t0, a1 = Math.PI * t1;
-      const p0 = [Math.cos(a0) * span / 2, Math.sin(a0) * h], p1 = [Math.cos(a1) * span / 2, Math.sin(a1) * h];
-      const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
-      const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) + 0.1;
-      const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]);
-      const g = new THREE.BoxGeometry(len, r, r); g.rotateZ(ang);
-      if (axis === 'z') g.rotateY(Math.PI / 2);
-      g.translate(x + (axis === 'x' ? mx : 0), my, z + (axis === 'z' ? mx : 0));
-      addGeo(g, ink);
-    }
-  }
+  // ---------------- floor: canyon bed + ink river ----------------
+  box(0, -3, -10, 128, 3, 12); box(0, -3, 10, 128, 3, 12);                     // banks, tops at y=0
+  box(0, -3, 0, 128, 1.8, 8, { ink: BK });                                    // river bed, top at y=-1.2
+  box(0, -1.2, 0, 128, 0.02, 7.6, { noCollide: true, ink: BK });             // ink surface
+  for (let x = -56; x <= 56; x += 7) box(x + rand(-1, 1), -1.19, rand(-2.4, 2.4), rand(1.2, 2.6), 0.02, 0.18, { noCollide: true, ink: INK.BLUE });   // current lines
+  // ways out of the river
+  for (const x of [-44, -18, 12, 38]) { stairs(x, -1.2, -2.5, '-z', 3, 3, { rise: 0.4, run: 0.5 }); stairs(x + 6, -1.2, 2.5, '+z', 3, 3, { rise: 0.4, run: 0.5 }); }
+  // stepping stones
+  for (const [x, z, r] of [[-30, 0.4, 1.1], [-27.6, -1.3, 0.8], [4, 1.2, 1.0], [6.4, -0.6, 0.9], [26, 0.2, 1.2]]) box(x, -1.2, z, r * 2, 1.3, r * 2);
 
-  // ---------------- the desk surface ----------------
-  box(0, -1, 0, 132, 1, 132);
-  // wood grain, drawn only
-  for (let i = -12; i <= 12; i++) {
-    const z = i * 4.2 + Math.sin(i * 1.7) * 1.1;
-    box(0, 0, z, 120, 0.02, 0.16 + 0.1 * Math.abs(Math.sin(i * 2.3)), { noCollide: true, ink: INK.ORANGE });
-  }
-  // desk edge: a raised rim rather than a wall, plus a fence of standing books behind it
-  const P = 50, T = 4;
-  for (const [cx, cz, w, d] of [[0, -P, 2 * P + T, T], [0, P, 2 * P + T, T], [-P, 0, T, 2 * P + T], [P, 0, T, 2 * P + T]]) {
-    box(cx, 0, cz, w, 1.6, d, { ink: INK.BLACK });
-    collider(cx, 1.6, cz, w, 14, d, { noNav: true });
-  }
-  // standing books forming the back wall, each a different height and colour
-  const inks = [INK.BLUE, INK.GREEN, INK.ORANGE, INK.PINK, INK.RED, INK.BLACK];
-  for (let i = 0; i < 26; i++) {
-    const t = (i / 25) * 2 - 1, h = 7 + Math.abs(Math.sin(i * 1.9)) * 7, w = 2.6 + (i % 3) * 0.7;
-    box(t * 46, 1.6, -P - 0.6, w, h, 3.4, { noCollide: true, ink: inks[i % inks.length] });
-    box(t * 46, 1.6, P + 0.6, w, h * 0.8, 3.4, { noCollide: true, ink: inks[(i + 2) % inks.length] });
-  }
-  for (let i = 0; i < 22; i++) {
-    const t = (i / 21) * 2 - 1, h = 6 + Math.abs(Math.cos(i * 1.6)) * 7;
-    box(-P - 0.6, 1.6, t * 46, 3.4, h, 2.8 + (i % 2) * 0.6, { noCollide: true, ink: inks[(i + 1) % inks.length] });
-    box(P + 0.6, 1.6, t * 46, 3.4, h * 0.85, 2.8 + (i % 2) * 0.6, { noCollide: true, ink: inks[(i + 4) % inks.length] });
-  }
-  for (const [x, z] of [[-47, 0], [47, 0], [0, -47], [0, 47], [-34, -34], [34, 34], [34, -34], [-34, 34]]) spawn(x, 0, z);
+  // ---------------- north cliff: three terraces ----------------
+  slab(-64, -30, 64, -16, 4, 4);        // T1  y=4
+  slab(-64, -42, 64, -30, 8, 8);        // T2  y=8
+  slab(-64, -52, 64, -42, 12, 12);      // T3  y=12
+  box(0, 0, -58, 128, 26, 12);          // back wall
+  // stairs cut into each edge, at different x so routes zigzag
+  // stairs sit in front of each edge and climb up to it (14 steps = 6.3 m of run)
+  for (const x of [-40, 20]) stairs(x, 0, -9.7, '-z', 14, 3.6);
+  for (const x of [-8, 46]) stairs(x, 4, -23.7, '-z', 14, 3.6);
+  for (const x of [-50, 10]) stairs(x, 8, -35.7, '-z', 14, 3.6);
+  // ledges that overhang the terrace below (cover from above, grapple lips)
+  slab(-24, -16.4, -12, -13.2, 4.3, 0.5); slab(30, -16.4, 38, -13.6, 4.3, 0.5); slab(-58, -30.4, -48, -27.6, 8.3, 0.5); slab(22, -42.4, 32, -39.4, 12.3, 0.5);
+  // boulders and spires on the north side
+  for (const [x, y, z, r] of [[-30, 4, -24, 1.6], [36, 4, -26, 1.3], [-18, 8, -36, 1.8], [30, 8, -34, 1.4], [-40, 12, -47, 1.5], [0, 12, -48, 2.0], [50, 12, -46, 1.2]]) sphere(x, y + r * 0.8, z, r, { seg: 9 }), collider(x, y, z, r * 1.5, r * 1.6, r * 1.5);
+  spire(-4, -23, 4, 12, 2.4, { mid: true }); spire(40, -36, 8, 10, 2.0); spire(-46, -47, 12, 9, 2.0);
+  // ink waterfall down the back wall into a pool on T3
+  box(38, 12, -52.05, 3.2, 14, 0.3, { noCollide: true, ink: BK }); box(38, 12.02, -49, 5, 0.02, 5, { noCollide: true, ink: BK });
+  for (let i = 0; i < 5; i++) box(36.8 + i * 0.7, 12.5 + (i % 2) * 5, -52.2, 0.12, 6, 0.12, { noCollide: true, ink: INK.BLUE });
+  bush(-52, 4, -20, 1.2); bush(12, 4, -27, 1); bush(-30, 8, -40, 1.3); bush(56, 8, -33); bush(20, 12, -50, 1.4); flowers(-12, 4, -20); flowers(44, 8, -38); flowers(-28, 12, -46, 6);
 
-  // ---------------- the open book: two page slopes meeting in a valley ----------------
-  {
-    const cz = -24, w = 30;
-    // spine
-    box(0, 0, cz, 2.2, 1.1, 20, { ink: INK.BLACK });
-    // page ramps rising away from the spine on both sides
-    ramp(1.1, cz, '+x', w / 2 - 1, 5.2, 20, { ink: INK.BLUE });
-    ramp(-1.1, cz, '-x', w / 2 - 1, 5.2, 20, { ink: INK.BLUE });
-    // ruled lines drawn across the pages
-    for (let i = 1; i < 9; i++) { const zz = cz - 10 + i * 2.2; box(8, 5.3, zz, 13, 0.02, 0.18, { noCollide: true, ink: INK.BLUE }); box(-8, 5.3, zz, 13, 0.02, 0.18, { noCollide: true, ink: INK.BLUE }); }
-    sniper(13, 5.2, cz); sniper(-13, 5.2, cz); pickup(0, 1.1, cz); pickup(13, 5.2, cz - 5); pickup(-13, 5.2, cz + 5);
-  }
+  // ---------------- south cliff: different heights, different rhythm ----------------
+  slab(-64, 16, 64, 26, 3, 3);          // S1  y=3
+  slab(-64, 26, 64, 40, 7, 7);          // S2  y=7
+  slab(-64, 40, 64, 50, 11, 11);        // S3  y=11
+  box(0, 0, 56, 128, 26, 12);           // back wall
+  for (const x of [-26, 34]) stairs(x, 0, 11.05, '+z', 11, 3.6, { rise: 3 / 11 });
+  for (const x of [2, -52]) stairs(x, 3, 19.7, '+z', 14, 3.6);
+  for (const x of [-30, 40]) stairs(x, 7, 33.7, '+z', 14, 3.6);
+  slab(-6, 13.2, 6, 16.4, 3.3, 0.5); slab(-48, 23.6, -40, 26.4, 7.3, 0.5); slab(14, 37.6, 26, 40.4, 11.3, 0.5);
+  for (const [x, y, z, r] of [[-44, 3, 21, 1.5], [18, 3, 22, 1.2], [-10, 7, 33, 1.7], [50, 7, 30, 1.4], [-20, 11, 45, 1.6], [34, 11, 46, 1.3]]) sphere(x, y + r * 0.8, z, r, { seg: 9 }), collider(x, y, z, r * 1.5, r * 1.6, r * 1.5);
+  spire(22, 21, 3, 13, 2.4, { mid: true }); spire(-38, 33, 7, 11, 2.0); spire(6, 45, 11, 9, 2.0);
+  bush(-16, 3, 19, 1.1); bush(46, 3, 24); bush(28, 7, 36, 1.3); bush(-56, 11, 44, 1.2); flowers(4, 3, 20); flowers(-30, 7, 30, 6); flowers(44, 11, 46);
 
-  // ---------------- the keyboard: a field of keys at staggered heights ----------------
-  {
-    const ox = -26, oz = 12, cols = 7, rows = 5, pitch = 4.0;
-    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-      if ((r === 2 && c === 3)) continue;                              // a missing key, a gap to fall through
-      const x = ox + c * pitch + r * 0.9, z = oz + r * pitch;
-      const h = 1.0 + ((r * 3 + c * 5) % 4) * 0.6;                     // staggered, but each within one step of its neighbour
-      box(x, 0, z, 3.6, h, 3.6, { ink: c % 3 === 0 ? INK.GREEN : INK.BLUE });
-      box(x, h, z, 3.8, 0.12, 3.8, { noCollide: true, ink: INK.BLACK });
-      if ((r + c) % 5 === 0) pickup(x, h, z);
-    }
-    // a long space bar along the front edge
-    box(ox + 12, 0, oz + rows * pitch + 1.4, 20, 1.9, 3.4, { ink: INK.BLUE });
-    ramp(ox + 12, oz + rows * pitch + 4.6, '-z', 3.2, 1.9, 20, { ink: INK.BLUE });
-    sniper(ox + 12, 1.9, oz + rows * pitch + 1.4);
-    spawn(ox - 4, 0, oz + 8);
-  }
+  // ---------------- crossings ----------------
+  // rope bridge at y=8 from T2 (north, y=8) to S2 (south, y=7): a step down at the south end
+  slab(-1.6, -30, 1.6, 24, 8, 0.3, { ink: OR }); box(0, 7, 24.5, 3.2, 1, 3.2, { ink: OR });
+  for (let z = -29; z < 24; z += 1.2) box(0, 8.02, z, 3.4, 0.03, 0.18, { noCollide: true, ink: BK });
+  rail(-1.6, -30, -1.6, 24, 8, { ink: OR }); rail(1.6, -30, 1.6, 24, 8, { ink: OR });
+  for (const z of [-30, -12, 6, 24]) { box(-1.9, 8, z, 0.25, 2.2, 0.25, { noCollide: true, ink: OR }); box(1.9, 8, z, 0.25, 2.2, 0.25, { noCollide: true, ink: OR }); }
+  // a fallen pencil across the river, a beam at y~2
+  { const g = new THREE.CylinderGeometry(0.9, 0.9, 30, 7); g.rotateX(Math.PI / 2); g.translate(-32, 1.2, 0); addGeo(g, OR); collider(-32, 0.3, 0, 1.8, 1.8, 30);
+    const tip = new THREE.ConeGeometry(0.9, 2.6, 7); tip.rotateX(-Math.PI / 2); tip.translate(-32, 1.2, -16.3); addGeo(tip, BK);
+    const er = new THREE.CylinderGeometry(0.95, 0.95, 1.8, 8); er.rotateX(Math.PI / 2); er.translate(-32, 1.2, 15.9); addGeo(er, PK); }
+  // a pipe high across the gorge to swing from
+  { const g = new THREE.CylinderGeometry(0.35, 0.35, 56, 8); g.rotateX(Math.PI / 2); g.translate(30, 13, 0); addGeo(g, INK.BLUE); collider(30, 12.65, 0, 0.7, 0.7, 56, { noNav: true });
+    for (const z of [-20, -6, 6, 20]) ring(30, 11.9, z, 'x'); box(30, 0, -28, 1.2, 13, 1.2); box(30, 0, 28, 1.2, 13, 1.2); }
+  // a rock arch over the river at the west end
+  box(-52, -1.2, -5, 3, 12, 3); box(-52, -1.2, 5, 3, 12, 3); box(-52, 10.8, 0, 3.4, 2.2, 13.4); ring(-52, 10.2, 0, 'x');
+  // stone pillars in the gorge for hopping and hooking
+  for (const [x, z, h] of [[-14, -8, 3.4], [-9, 10, 5.2], [16, -10, 4.4], [44, 9, 6.0], [48, -9, 3.0]]) { box(x, 0, z, 2.6, h, 2.6); ring(x, h + 1.1, z, 'y'); }
 
-  // ---------------- the mug: spiral up a stack of sugar cubes to a wide rim ----------------
-  {
-    const mx = 24, mz = -6, R = 7.5, H = 9.5;
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * TAU;
-      const g = new THREE.BoxGeometry(3.0, H, 1.6); g.rotateY(-a); g.translate(mx + Math.cos(a) * R, H / 2, mz + Math.sin(a) * R); addGeo(g, INK.BLUE);
-      collider(mx + Math.cos(a) * R, 0, mz + Math.sin(a) * R, 3.0, H, 3.0, { noNav: true });
-    }
-    slab(mx - R + 1.4, mz - R + 1.4, mx + R - 1.4, mz + R - 1.4, H, 0.5);   // the drink surface, standable
-    // handle
-    const hnd = new THREE.TorusGeometry(3.2, 0.75, 8, 14, Math.PI * 1.1); hnd.rotateY(Math.PI / 2); hnd.translate(mx + R + 1.4, H * 0.55, mz); addGeo(hnd, INK.BLUE);
-    // a stack of sugar cubes wrapping the mug as a continuous stair up to the rim
-    const stepsUp = Math.ceil(H / 0.42);
-    for (let i = 0; i <= stepsUp; i++) {
-      const a = -1.5 + i * (3.4 / stepsUp), rr = R + 3.1;
-      box(mx + Math.cos(a) * rr, 0, mz + Math.sin(a) * rr, 3.0, 0.42 * (i + 1), 3.0, { ink: INK.PINK });
-    }
-    sniper(mx, H, mz); pickup(mx, H, mz); pickup(mx + R + 4, 1, mz - 4);
-  }
+  // ---------------- perimeter cliffs ----------------
+  box(-64, 0, 0, 12, 26, 128); box(64, 0, 0, 12, 26, 128);
 
-  // ---------------- pens and pencils laid across the desk as beams ----------------
-  barrel(-14, 0, 30, 30, 1.15, 'x', INK.ORANGE);
-  { const t = new THREE.ConeGeometry(1.15, 3.2, 7); t.rotateZ(-Math.PI / 2); t.translate(2.6, 1.15, 30); addGeo(t, INK.BLACK); collider(2.6, 0, 30, 3.2, 2.3, 2.3); }
-  ramp(-33.5, 30, '+x', 4.4, 2.25, 2.6, { ink: INK.PINK });
-  barrel(18, 0, 34, 26, 1.05, 'x', INK.GREEN);
-  ramp(35.4, 34, '-x', 4.2, 2.05, 2.4, { ink: INK.GREEN });
-  barrel(38, 0, 6, 24, 1.1, 'z', INK.BLUE);
-  ramp(38, -10.4, '+z', 4.4, 2.15, 2.5, { ink: INK.BLUE });
+  // ---------------- spawns, perches, pickups, teams ----------------
+  for (const [x, y, z] of [[-56, 0, -10], [-56, 0, 10], [56, 0, -10], [56, 0, 10], [-20, 4, -20], [26, 4, -24], [-30, 8, -36], [16, 8, -38], [-46, 3, 20], [36, 3, 22], [-14, 7, 34], [46, 7, 32], [-8, 12, -47], [-50, 11, 44]]) spawn(x, y, z);
+  for (const [x, y, z] of [[-40, 12, -46], [8, 12, -47], [50, 12, -48], [-18, 11, 44], [26, 11, 46], [54, 11, 42], [-4, 4, -19], [22, 3, 20]]) sniper(x, y, z);
+  for (const [x, y, z] of [[0, 8, -3], [-32, 2.2, 0], [12, 0, 10], [-20, 0, -11], [-20, 4, -24], [30, 8, -34], [-26, 3, 20], [6, 7, 30], [0, 12, -46], [-40, 11, 45], [40, 0, 0], [-52, 13, 0]]) pickup(x, y, z);
+  for (const [x, y, z] of [[-56, 0, -10], [-56, 0, 10], [-46, 3, 20], [-50, 8, -36], [-40, 12, -46]]) L.teamSpawns[0].push(new THREE.Vector3(x, y, z));
+  for (const [x, y, z] of [[56, 0, -10], [56, 0, 10], [36, 3, 22], [46, 7, 32], [50, 12, -48]]) L.teamSpawns[1].push(new THREE.Vector3(x, y, z));
 
-  // ---------------- eraser and sticky-note blocks in the open ground ----------------
-  // Each block gets a slope generated from its own footprint, so the slope always starts on open
-  // ground and finishes flush with the top rather than burying itself in the block.
-  function blockWithRamp(x, z, w, d, h, ink, side) {
-    box(x, 0, z, w, h, d, { ink });
-    box(x, h, z, w + 0.25, 0.12, d + 0.25, { noCollide: true, ink: INK.BLACK });
-    const len = Math.max(3.2, h * 1.7), rw = Math.min(w, d, 4.2);
-    if (side === '-z') ramp(x, z - d / 2 - len, '+z', len, h, rw, { ink });
-    else if (side === '+z') ramp(x, z + d / 2 + len, '-z', len, h, rw, { ink });
-    else if (side === '-x') ramp(x - w / 2 - len, z, '+x', len, h, rw, { ink });
-    else ramp(x + w / 2 + len, z, '-x', len, h, rw, { ink });
-    sniper(x, h, z); pickup(x, h, z);
-  }
-  for (const [x, z, w, d, h, ink, side] of [
-    [-38, -8, 8, 6, 3.4, INK.PINK, '-z'], [-20, -6, 6, 6, 5.0, INK.ORANGE, '+z'], [10, 8, 7, 7, 2.4, INK.GREEN, '-z'],
-    [4, 22, 9, 6, 4.0, INK.PINK, '+z'], [-6, -6, 5, 5, 6.2, INK.BLUE, '+z'], [30, 22, 7, 7, 3.0, INK.ORANGE, '+z'],
-    [-40, 40, 7, 7, 5.6, INK.GREEN, '+x'], [40, -40, 7, 7, 5.6, INK.PINK, '-x'],
-  ]) blockWithRamp(x, z, w, d, h, ink, side);
-
-  // ---------------- paper clips arching overhead: the swing network ----------------
-  clipArch(-14, 30, 34, 15, 'x', INK.BLACK);
-  clipArch(18, 34, 30, 13, 'x', INK.BLACK);
-  clipArch(38, 6, 28, 14, 'z', INK.BLACK);
-  clipArch(0, -24, 34, 17, 'x', INK.BLACK);
-  clipArch(-26, 22, 30, 12, 'z', INK.BLACK);
-  // a desk lamp arcing over the middle: the one thing with a grapple ring on it
-  {
-    const lx = 34, lz = 40;
-    cyl(lx, 0, lz, 3.2, 1.0, { seg: 14, ink: INK.BLACK });
-    post(lx, lz, 1.0, 17, 0.5, INK.BLACK);
-    for (let i = 0; i < 8; i++) {
-      const t = i / 7, a = t * Math.PI * 0.55;
-      const g = new THREE.BoxGeometry(0.85, 0.85, 4.6); g.rotateX(a * 0.4);
-      g.translate(lx - Math.sin(a) * 16 * t, 17.4 + Math.cos(a) * 1.5, lz - Math.cos(a) * 4 * t - t * 10); addGeo(g, INK.BLACK);
-    }
-    const shade = new THREE.ConeGeometry(5.2, 6, 10, 1, true); shade.rotateX(Math.PI * 0.86); shade.translate(lx - 15, 15.5, lz - 17); addGeo(shade, INK.ORANGE);
-    ring(lx - 15, 12.4, lz - 17, 'y');
-    sphere(lx - 15, 13.6, lz - 17, 1.6, { seg: 10, ink: INK.ORANGE });
-  }
-  // and one more ring hanging from the tallest clip, for a long swing across the middle
-  ring(0, 15.4, -24, 'x');
-
-  // ---------------- odds and ends, low cover in the open ----------------
-  for (const [x, z, r, ink] of [[-30, 44, 1.5, INK.BLUE], [16, -38, 1.7, INK.GREEN], [-46, 20, 1.4, INK.ORANGE],
-    [46, -18, 1.5, INK.PINK], [22, 44, 1.3, INK.BLUE], [-16, -44, 1.6, INK.BLACK]]) {
-    cyl(x, 0, z, r, r * 1.6, { seg: 10, ink });
-  }
-  for (const [x, z] of [[-10, 40], [12, -14], [-44, -30], [44, 30], [26, -30], [-28, -40]]) {
-    box(x, 0, z, 3.4, 1.5, 3.4, { ink: INK.BLUE }); box(x, 1.5, z, 3.6, 0.1, 3.6, { noCollide: true, ink: INK.BLACK });
-  }
-  for (const [x, y, z] of [[0, 0, 8], [-16, 0, 0], [16, 0, 16], [0, 0, -8], [-34, 0, 30], [34, 0, -22], [0, 0, 40]]) pickup(x, y, z);
-
-  // ---------------- above the desk ----------------
-  sphere(-80, 96, -150, 12, { seg: 12 });
-  for (let i = 0; i < 12; i++) { const a = (i / 12) * TAU; const g = new THREE.BoxGeometry(5.5, 0.7, 0.7); g.rotateZ(a); g.translate(-80 + Math.cos(a) * 18, 96 + Math.sin(a) * 18, -150); addGeo(g, INK.BLUE); }
-  for (const [cx, cy, cz, sc] of [[60, 80, -180, 1.1], [-40, 88, -200, 1], [130, 72, 70, 1], [-130, 76, 80, 1.1]])
-    for (let i = 0; i < 6; i++) sphere(cx + (i - 2.5) * 5 * sc, cy + Math.sin(i * 1.7) * 2.5 * sc, cz, (4 + (i % 3)) * sc, { seg: 10 });
-
-  planes(3, 44, 30);
+  // ---------------- sky: sun, clouds, birds ----------------
+  sphere(-80, 95, -170, 12, { seg: 12 });
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU; const g = new THREE.BoxGeometry(6, 0.7, 0.7); g.rotateZ(a); g.translate(-80 + Math.cos(a) * 19, 95 + Math.sin(a) * 19, -170); addGeo(g, INK.BLUE); }
+  for (const [cx, cy, cz, sc] of [[50, 70, -180, 1.1], [-150, 60, -40, 1], [140, 66, 30, 0.9], [-30, 82, 185, 1.2]]) for (let i = 0; i < 6; i++) sphere(cx + (i - 2.5) * 5 * sc, cy + Math.sin(i * 1.7) * 2.5 * sc, cz, (4 + (i % 3)) * sc, { seg: 10 });
+  planes(2, 42, 28);
   return B.finish();
 }
 
 export function buildLevel(scene, world, key = 'district') {
   const B = createBuilder(scene, world);
-  return key === 'desk' ? buildDesk(B) : buildDistrict(B);
+  return key === 'canyon' ? buildCanyon(B) : buildDistrict(B);
 }

@@ -9,6 +9,8 @@ const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vecto
 const _up = new THREE.Vector3(0, 1, 0), _eye = new THREE.Vector3(), _goal = new THREE.Vector3();
 const nxOf = (dx, d) => dx / (d || 1), nzOf = (dz, d) => dz / (d || 1);
 
+export const BOSSES = ['boss', 'eraser', 'inkblot'];
+export const STATE_CODES = { spawn: 0, hunt: 1, stunned: 2, dead: 3 }; export const STATE_NAMES = ['spawn', 'hunt', 'stunned', 'dead'];
 export const TYPES = {
   grunt: { hp: 100, speed: 5.2, weapon: 'rifle', range: 28, stop: 16, keep: 7, burst: 3, burstInt: 0.15, cool: [1.6, 2.6], dmg: 6, spread: 0.055, pspeed: 36, score: 100, scale: 1.0, name: 'GRUNT', hat: 'cap', build: { bodyW: 1, headS: 1, limbR: 0.032 } },
   rusher: { hp: 70, speed: 7.6, weapon: 'blade', lunge: 2.9, reach: 3.0, standoff: 1.9, cool: [1.0, 1.5], dmg: 15, score: 120, scale: 0.95, name: 'RUSHER', hat: 'band', build: { bodyW: 0.82, headS: 0.95, limbR: 0.027 } },
@@ -17,7 +19,9 @@ export const TYPES = {
   shield: { hp: 150, speed: 3.8, weapon: 'pistol', range: 20, stop: 8, keep: 4, burst: 2, burstInt: 0.2, cool: [1.8, 2.6], dmg: 5, spread: 0.06, pspeed: 34, score: 200, scale: 1.05, name: 'SHIELDBEARER', hat: 'helmet', shield: true, build: { bodyW: 1.2, headS: 0.9, limbR: 0.042 } },
   bomber: { hp: 26, speed: 6.5, weapon: 'bomb', fuseRange: 3.4, fuse: 1.05, blast: 4.2, dmg: 24, score: 150, scale: 0.9, name: 'INK BOMB', ink: INK.BLACK, model: 'bomber' },
   flyer: { hp: 40, speed: 6.2, weapon: 'dive', dmg: 10, cool: [2.8, 4.2], score: 140, scale: 1.5, name: 'PAPER WASP', flying: true, model: 'flyer' },
-  boss: { hp: 2600, speed: 3.2, weapon: 'boss', range: 32, stop: 6, keep: 0, cool: [2.6, 3.6], dmg: 22, score: 2500, scale: 2.7, name: 'THE DOODLER', boss: true, ink: INK.BLACK, hat: 'crown', build: { bodyW: 1.35, headS: 1.15, limbR: 0.06 } },
+  boss: { hp: 2600, speed: 3.2, weapon: 'boss', bossKind: 'doodler', range: 32, stop: 6, keep: 0, cool: [2.6, 3.6], dmg: 22, score: 2500, scale: 2.7, name: 'THE DOODLER', boss: true, ink: INK.BLACK, hat: 'crown', build: { bodyW: 1.35, headS: 1.15, limbR: 0.06 } },
+  eraser: { hp: 3400, speed: 4.2, weapon: 'boss', bossKind: 'eraser', range: 30, stop: 8, keep: 0, cool: [2.2, 3.2], dmg: 26, score: 3200, scale: 2.6, name: 'THE ERASER', boss: true, ink: INK.PINK, model: 'blob', build: {} },
+  inkblot: { hp: 3000, speed: 3.0, weapon: 'boss', bossKind: 'inkblot', range: 34, stop: 10, keep: 0, cool: [2.4, 3.4], dmg: 20, score: 3600, scale: 2.4, name: 'THE INKBLOT', boss: true, ink: INK.BLACK, model: 'blob', build: {} },
 };
 
 // ---------------- doodle model kit ----------------
@@ -62,7 +66,7 @@ function buildHat(headG, mat, solid, T) {
   else if (h === 'hood') { const c = new THREE.Mesh(new THREE.SphereGeometry(0.33, 10, 7, 0, TAU, 0, Math.PI * 0.62), mat); c.position.y = -0.02; c.scale.set(1.03, 1.15, 0.95); headG.add(c); const tail = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.5, 5), mat); tail.position.set(0, 0.16, -0.3); tail.rotation.x = 1.5; headG.add(tail); }
   else if (h === 'crown') { for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.26, 4), mat); sp.position.set(Math.cos(a) * 0.22, 0.34, Math.sin(a) * 0.22); headG.add(sp); } const b = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.035, 4, 14), mat); b.rotation.x = Math.PI / 2; b.position.y = 0.24; headG.add(b); }
 }
-function buildWeaponProp(gun, mat, solid, T) {
+export function buildWeaponProp(gun, mat, solid, T) {
   if (T.weapon === 'blade') { bx(0.02, 0.05, 0.95, 0, 0.04, 0.42, mat, gun); bx(0.11, 0.11, 0.03, 0, 0.04, -0.06, solid, gun); bx(0.035, 0.045, 0.24, 0, 0.04, -0.19, solid, gun); }
   else if (T.weapon === 'shotgun') { bx(0.1, 0.13, 0.66, 0, 0.02, 0.2, mat, gun); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 6), solid); b.rotation.x = Math.PI / 2; b.position.set(0, 0.08, 0.5); gun.add(b); }
   else if (T.weapon === 'sniper') { bx(0.075, 0.11, 0.6, 0, 0.02, 0.15, mat, gun); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.95, 6), solid); b.rotation.x = Math.PI / 2; b.position.set(0, 0.05, 0.72); gun.add(b); bx(0.06, 0.07, 0.22, 0, 0.13, 0.06, solid, gun); }
@@ -71,7 +75,7 @@ function buildWeaponProp(gun, mat, solid, T) {
   else { bx(0.085, 0.12, 0.5, 0, 0.02, 0.16, mat, gun); const b = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.34, 6), solid); b.rotation.x = Math.PI / 2; b.position.set(0, 0.05, 0.52); gun.add(b); bx(0.05, 0.16, 0.09, 0, -0.09, 0.08, mat, gun); }
 }
 
-function buildHumanoid(mat, solid, T) {
+export function buildHumanoid(mat, solid, T) {
   const root = new THREE.Group(); const parts = {}, J = {};
   const build = T.build || {};
   const bodyW = build.bodyW ?? 1, headS = build.headS ?? 1, limbR = build.limbR ?? 0.032;
@@ -111,7 +115,7 @@ function buildHumanoid(mat, solid, T) {
   root.scale.setScalar(T.scale);
   return { root, parts, J, tip, face: fc, hit };
 }
-function buildBomber(mat, solid, T) {
+function buildBomber(mat, solid, T, boss = false) {
   const root = new THREE.Group(); const parts = {}, J = {};
   const hips = new THREE.Group(); hips.position.y = 0.5; root.add(hips);
   const torso = new THREE.Group(); hips.add(torso);
@@ -119,9 +123,17 @@ function buildBomber(mat, solid, T) {
   parts.torso = new THREE.Object3D(); parts.torso.position.y = 0.32; torso.add(parts.torso); parts.head = parts.torso;
   const headG = new THREE.Group(); headG.position.y = 0.32; torso.add(headG);
   const fc = doodleFace(headG, solid, { ex: 0.13, ey: 0.1, ez: 0.38, er: 0.06 });
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.14, 7), mat); cap.position.y = 0.76; torso.add(cap);
-  const fuse = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(V3(0, 0.8, 0), V3(0.16, 1.0, 0), V3(0.24, 1.14, 0)), 5, 0.02, 5, false), solid); torso.add(fuse);
-  const spark = new THREE.Mesh(new THREE.SphereGeometry(0.075, 6, 5), makeInkMaterial({ ink: INK.ORANGE, fill: true })); spark.position.set(0.24, 1.14, 0); torso.add(spark);
+  let spark = null;
+  if (!boss) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.14, 7), mat); cap.position.y = 0.76; torso.add(cap);
+    const fuse = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(V3(0, 0.8, 0), V3(0.16, 1.0, 0), V3(0.24, 1.14, 0)), 5, 0.02, 5, false), solid); torso.add(fuse);
+    spark = new THREE.Mesh(new THREE.SphereGeometry(0.075, 6, 5), makeInkMaterial({ ink: INK.ORANGE, fill: true })); spark.position.set(0.24, 1.14, 0); torso.add(spark);
+  } else if (T.bossKind === 'inkblot') {
+    for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU; const sp = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 5), mat); sp.position.set(Math.cos(a) * 0.42, 0.32 + Math.sin(a * 2.3) * 0.25, Math.sin(a) * 0.42); sp.lookAt(Math.cos(a) * 3, 0.32, Math.sin(a) * 3); sp.rotateX(Math.PI / 2); torso.add(sp); }
+  } else {
+    // a chunky rubber block on top: the eraser wears its own head
+    bx(0.7, 0.32, 0.5, 0, 0.86, 0, mat, torso); bx(0.74, 0.05, 0.54, 0, 0.7, 0, solid, torso);
+  }
   const armL = noodle(0.26, 0.03, mat, torso, -0.42, 0.42, 0), armR = noodle(0.26, 0.03, mat, torso, 0.42, 0.42, 0);
   mitten(0.07, mat, armL, -0.26); mitten(0.07, mat, armR, -0.26);
   const legL = noodle(0.26, 0.035, mat, hips, -0.16, -0.06, 0), legR = noodle(0.26, 0.035, mat, hips, 0.16, -0.06, 0);
@@ -129,7 +141,8 @@ function buildBomber(mat, solid, T) {
   shoe(mat, shinL, -0.24, 0.9); shoe(mat, shinR, -0.24, 0.9);
   Object.assign(J, { hips, torso, headG, armL, armR, foreL: armL, foreR: armR, legL, legR, shinL, shinR, gun: new THREE.Group(), spark });
   root.scale.setScalar(T.scale);
-  return { root, parts, J, tip: spark, face: fc, hit: [['torso', 0.5]] };
+  const tip = spark || (() => { const o = new THREE.Object3D(); o.position.set(0, 0.5, 0.5); torso.add(o); return o; })();
+  return { root, parts, J, tip, face: fc, hit: [['torso', 0.5]] };
 }
 function buildFlyer(mat, solid, T) {
   const root = new THREE.Group(); const parts = {}, J = {};
@@ -147,14 +160,17 @@ function buildFlyer(mat, solid, T) {
 
 class Projectiles {
   constructor(mgr) {
-    this.mgr = mgr; this.list = []; this.max = 240;
+    this.mgr = mgr; this.list = []; this.max = 240; this.onFire = null;
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), makeInkMaterial({ ink: INK.RED, fill: true }), this.max);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.max * 3), 3);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.mesh.frustumCulled = false; this.mesh.count = 0; mgr.ctx.scene.add(this.mesh);
   }
-  fire(pos, dir, speed, dmg, owner, ink = INK.RED, thick = 0.045, blast = 0) {
+  fire(pos, dir, speed, dmg, owner, ink = INK.RED, thick = 0.045, blast = 0, id = null) {
     if (this.list.length >= this.max) this.list.shift();
-    this.list.push({ pos: pos.clone(), prev: pos.clone(), vel: dir.clone().multiplyScalar(speed), dmg, owner, life: 4, deflected: false, ink, thick, origin: pos.clone(), blast });
+    const p = { id: id ?? this.mgr.nextId++, pos: pos.clone(), prev: pos.clone(), vel: dir.clone().multiplyScalar(speed), dmg, owner, life: 4, deflected: false, ink, thick, origin: pos.clone(), blast };
+    this.list.push(p);
+    if (this.onFire && id === null) this.onFire(p);
+    return p;
   }
   clear() { this.list.length = 0; this.mesh.count = 0; }
   deflectArc(origin, forward, range, cosHalf, player) {
@@ -169,9 +185,9 @@ class Projectiles {
     const speed = p.vel.length() * 1.6; if (target) _d.subVectors(target.center, p.pos).normalize(); else _d.copy(player.forward);
     p.vel.copy(_d).multiplyScalar(speed); mgr.ctx.effects.sparks(p.pos, _d, INK.ORANGE, 10, 9); mgr.ctx.effects.strokeBurst(p.pos, INK.BLUE, 8, 4, { life: 0.2 });
   }
-  _burst(p, point) { const ctx = this.mgr.ctx; ctx.effects.explosion(point, 2.5, INK.BLACK); audio.explosion(point); const P = ctx.player; const d = P.center.distanceTo(point); if (d < 3.5 && P.alive) { P.takeDamage(p.dmg * (1 - d / 3.5), point); P.knockback(_v.subVectors(P.center, point).normalize(), 6); } this.mgr.blastEnemies(point, 3.5, p.dmg * 1.5, p.owner); }
+  _burst(p, point) { const ctx = this.mgr.ctx; ctx.effects.explosion(point, 2.5, INK.BLACK); audio.explosion(point); const P = ctx.player; const d = P.center.distanceTo(point); if (d < 3.5 && P.alive) { P.takeDamage(p.dmg * (1 - d / 3.5), point); P.knockback(_v.subVectors(P.center, point).normalize(), 6); } if (!this.mgr.mirror) this.mgr.blastEnemies(point, 3.5, p.dmg * 1.5, p.owner); }
   update(dt) {
-    const mgr = this.mgr, ctx = mgr.ctx, P = ctx.player, world = ctx.world; const list = this.list; let n = 0;
+    const mgr = this.mgr, ctx = mgr.ctx, world = ctx.world; const list = this.list; let n = 0;
     for (let i = 0; i < list.length; i++) {
       const p = list[i]; p.life -= dt; if (p.life <= 0) continue;
       p.prev.copy(p.pos); if (p.blast) p.vel.y -= 9 * dt; p.pos.addScaledVector(p.vel, dt);
@@ -179,20 +195,20 @@ class Projectiles {
       const hw = world.raycast(p.prev, _d, len, SEE_THROUGH);
       if (hw) { if (p.blast) this._burst(p, hw.point); else { ctx.effects.bulletImpact(hw.point, hw.normal, p.ink); if (Math.random() < 0.5) audio.bulletImpact(hw.point); } continue; }
       if (!p.deflected) {
-        const catchR = Math.max(p.blast ? 0.9 : 0.5, P.blockRadius);
-        if (P.alive && this._segHitsPlayer(p.prev, p.pos, P, catchR)) {
-          const def = P.tryDeflect(p);
-          if (def) {
-            if (def.ret) { this._deflect(p, P, def.perfect); list[n++] = p; }
-            else { p.deflected = true; ctx.effects.strokeBurst(p.pos, INK.RED, 5, 6, { life: 0.18, size: 0.03 }); }
-            continue;
-          }
-          // only a real body hit does damage; the wider radius is purely the block's reach
-          if (this._segHitsPlayer(p.prev, p.pos, P, p.blast ? 0.9 : 0.5)) {
-            if (p.blast) this._burst(p, p.pos); else P.takeDamage(p.dmg, p.origin);
-            continue;
-          }
+        // every peer runs the same projectile; only the local player takes damage from it here,
+        // other players just make it disappear on this screen (their own client handles them)
+        let consumed = false;
+        for (const P of mgr.targets()) {
+          if (!P.alive) continue;
+          const catchR = Math.max(p.blast ? 0.9 : 0.5, P.isLocal ? P.blockRadius : 0);
+          if (!this._segHitsPlayer(p.prev, p.pos, P, catchR)) continue;
+          if (P.isLocal) {
+            const def = P.tryDeflect(p);
+            if (def) { if (def.ret) { this._deflect(p, P, def.perfect); list[n++] = p; } else { p.deflected = true; ctx.effects.strokeBurst(p.pos, INK.RED, 5, 6, { life: 0.18, size: 0.03 }); } consumed = true; break; }
+            if (this._segHitsPlayer(p.prev, p.pos, P, p.blast ? 0.9 : 0.5)) { if (p.blast) this._burst(p, p.pos); else P.takeDamage(p.dmg, p.origin); consumed = true; break; }
+          } else if (this._segHitsPlayer(p.prev, p.pos, P, p.blast ? 0.9 : 0.5)) { consumed = true; break; }
         }
+        if (consumed) continue;
       } else {
         const he = mgr.raycast(p.prev, _d, len);
         if (he) { if (p.blast) this._burst(p, he.point); else mgr.damage(he.enemy, p.dmg, { point: he.point, dir: _d.clone(), part: he.part, source: 'deflect', crit: he.part === 'head' }); continue; }
@@ -215,21 +231,37 @@ class Projectiles {
 }
 
 export class EnemyManager {
-  constructor(ctx) { this.ctx = ctx; this.enemies = []; this.alive = 0; this.projectiles = new Projectiles(this); this.onKill = null; this.onBoss = null; this._sepT = 0; this._slot = 0; this.mods = { speed: 1, damage: 1 }; }
-  clear() { for (const e of this.enemies) { this._removeLaser(e); if (!e.rootDetached) this.ctx.scene.remove(e.root); } this.enemies.length = 0; this.alive = 0; this.projectiles.clear(); }
-  spawn(type, pos) {
+  constructor(ctx) {
+    this.ctx = ctx; this.enemies = []; this.alive = 0; this.projectiles = new Projectiles(this); this.onKill = null; this.onBoss = null; this._sepT = 0; this._slot = 0; this.mods = { speed: 1, damage: 1 };
+    // mirror mode: this peer is a client; the host owns AI, physics and health, we only render
+    this.mirror = false; this.nextId = 1; this.onClientHit = null; this.onSpawn = null; this.byId = new Map();
+  }
+  // Everyone an enemy may go after. Solo play is just the local player.
+  targets() { return this.ctx.targets ? this.ctx.targets() : [this.ctx.player]; }
+  _pickTarget(e, dt) {
+    e.retargetT = (e.retargetT ?? 0) - dt;
+    if (e.target && e.target.alive && e.retargetT > 0) return e.target;
+    e.retargetT = 0.5; let best = null, bd = Infinity;
+    for (const t of this.targets()) { if (!t.alive) continue; const d = t.body.pos.distanceToSquared(e.body.pos); if (d < bd) { bd = d; best = t; } }
+    e.target = best; return best;
+  }
+  nearestTarget(pos) { let best = null, bd = Infinity; for (const t of this.targets()) { if (!t.alive) continue; const d = t.body.pos.distanceToSquared(pos); if (d < bd) { bd = d; best = t; } } return best; }
+  clear() { for (const e of this.enemies) { this._removeLaser(e); if (!e.rootDetached) this.ctx.scene.remove(e.root); } this.enemies.length = 0; this.alive = 0; this.byId.clear(); this.projectiles.clear(); }
+  spawn(type, pos, id = null) {
     const T = TYPES[type]; const ink = T.ink ?? INK.RED;
     const mat = makeInkMaterial({ ink, shadeScale: 0, shadeBias: 1 });
     const solid = makeInkMaterial({ ink: T.ink === INK.BLACK ? INK.RED : INK.BLACK, fill: true, side: THREE.DoubleSide });
-    const model = T.model === 'bomber' ? buildBomber(mat, solid, T) : T.model === 'flyer' ? buildFlyer(mat, solid, T) : buildHumanoid(mat, solid, T);
+    const model = T.model === 'bomber' ? buildBomber(mat, solid, T) : T.model === 'blob' ? buildBomber(mat, solid, T, true) : T.model === 'flyer' ? buildFlyer(mat, solid, T) : buildHumanoid(mat, solid, T);
     const hw = T.flying ? 0.45 : Math.min(0.33 * T.scale, 0.9);
     const e = { type, T, mat, root: model.root, parts: model.parts, J: model.J, tip: model.tip, face: model.face, hit: model.hit, hp: T.hp, maxHp: T.hp, alive: true, state: 'spawn', t: 0,
       body: makeBody(pos, hw, (T.flying ? 0.8 : 1.85) * T.scale, T.boss ? 1.2 : 0.6), center: new THREE.Vector3(), yaw: rand(0, TAU), yawT: 0, phase: rand(0, TAU), walk: 0, aimAmt: 0, flinch: 0, flashT: 0, flashOn: false,
       path: null, pathI: 0, pathT: 0, pathGoal: null, losT: 0, los: false, cool: rand(0.6, 1.4), burstLeft: 0, burstT: 0, aimT: 0, attackT: 0, attackHit: false, stunDur: 0, stuckT: 0, strafeDir: Math.random() < 0.5 ? 1 : -1, strafeT: rand(1, 2), deadT: 0,
       appAng: (this._slot++) * 2.39996, appR: 0, appT: rand(0, 2), keepMul: rand(0.75, 1.35), backoffT: 0,
       hitSpheres: model.hit.map(() => new THREE.Vector3()), fuseT: -1, shieldHp: T.shield ? 2 : 0, flyState: 'orbit', flyT: rand(0, 3), orbitDir: Math.random() < 0.5 ? 1 : -1, bossAtk: null, rootDetached: false };
+    e.id = id ?? this.nextId++; this.byId.set(e.id, e);
     e.body.alwaysStep = true; if (T.flying) e.body.noSnap = true; e.root.position.copy(pos); e.root.scale.setScalar(0.001);
     this.ctx.scene.add(e.root); this.enemies.push(e); this.alive++;
+    if (this.onSpawn && !this.mirror) this.onSpawn(e);
     this.ctx.effects.strokeBurst(pos.clone().add(_v.set(0, 1, 0)), T.ink ?? INK.RED, T.boss ? 60 : 26, T.boss ? 10 : 6, { life: 0.5, size: 0.03 }); audio.spawn(pos);
     if (T.boss) { audio.bossRoar(pos); if (this.onBoss) this.onBoss(e); }
     return e;
@@ -270,6 +302,12 @@ export class EnemyManager {
   }
   damage(e, amount, info) {
     if (!e.alive) return;
+    if (this.mirror) {
+      // show the hit right away, let the host decide what it did
+      if (info.part !== 'shield') { e.flinch = 1; e.flashT = 0.07; if (!e.flashOn) { setFill(e.mat, true); e.flashOn = true; } this.ctx.effects.blood(info.point || e.center, info.dir || _up, clamp(0.5 + amount / 70, 0.5, 2.2), { ink: e.T.ink === INK.BLACK ? INK.BLACK : INK.RED }); this.ctx.hud.hitmarker(false, info.crit); }
+      if (this.onClientHit) this.onClientHit(e, amount, info);
+      return;
+    }
     if (info.part === 'shield') {
       this.ctx.effects.sparks(info.point, info.dir ? info.dir.clone().negate() : _up, INK.ORANGE, 8, 8); audio.shieldHit(info.point);
       if (info.source === 'katana' || info.source === 'blast') { e.shieldHp--; if (e.shieldHp <= 0) this._breakShield(e); }
@@ -325,18 +363,20 @@ export class EnemyManager {
     if (this.onKill) this.onKill(e, info, over);
   }
   _explodeBomber(e, scale = 1) {
-    const P = this.ctx.player, T = e.T; const c = e.center.clone(); this.ctx.effects.explosion(c, T.blast * scale, INK.BLACK); audio.explosion(c);
-    const d = P.center.distanceTo(c); if (P.alive && d < T.blast * scale) { P.takeDamage(T.dmg * this.mods.damage * Math.sqrt(1 - d / (T.blast * scale)), c); P.knockback(_v.subVectors(P.center, c).normalize(), 7); }
+    const T = e.T; const c = e.center.clone(); this.ctx.effects.explosion(c, T.blast * scale, INK.BLACK); audio.explosion(c);
+    for (const P of this.targets()) { const d = P.center.distanceTo(c); if (P.alive && d < T.blast * scale) { P.takeDamage(T.dmg * this.mods.damage * Math.sqrt(1 - d / (T.blast * scale)), c); P.knockback(_v.subVectors(P.center, c).normalize(), 7); } }
     this.blastEnemies(c, T.blast * scale, 70, e);
     if (e.alive) { e.alive = false; e.state = 'dead'; this.alive--; if (this.onKill) this.onKill(e, { source: 'blast', dir: _up.clone() }, true); }
     this.ctx.scene.remove(e.root); e.rootDetached = true; e.deadT = 99;
   }
   eye(e, out) { return out.setFromMatrixPosition(e.parts.head.matrixWorld); }
   update(dt) {
-    const ctx = this.ctx, P = ctx.player, world = ctx.world; const pp = P.body.pos, pc = P.center;
+    if (this.mirror) { this._updateMirror(dt); return; }
+    const ctx = this.ctx, world = ctx.world;
     for (const e of this.enemies) {
       e.t += dt;
       if (!e.alive) { this._updateDead(e, dt); continue; }
+      const P = this._pickTarget(e, dt) || ctx.player; const pp = P.body.pos, pc = P.center;
       if (e.flashT > 0) { e.flashT -= dt; if (e.flashT <= 0 && e.flashOn) { setFill(e.mat, false); e.flashOn = false; } }
       e.flinch = damp(e.flinch, 0, 9, dt);
       if (e.state === 'spawn') {
@@ -346,10 +386,10 @@ export class EnemyManager {
         continue;
       }
       if (e.state === 'stunned' && e.laser) this._hideLaser(e);
-      if (e.T.flying) { this._thinkFlyer(e, dt, pc); world.moveBody(e.body, dt); }
+      if (e.T.flying) { this._thinkFlyer(e, dt, pc, P); world.moveBody(e.body, dt); }
       else {
         if (e.state === 'stunned') { if (e.t > e.stunDur) e.state = 'hunt'; }
-        else if (P.alive) this._think(e, dt, pp, pc); else this._wander(e, dt);
+        else if (P.alive) this._think(e, dt, pp, pc, P); else this._wander(e, dt);
         e.body.vel.y -= 24 * dt; world.moveBody(e.body, dt);
       }
       if (e.body.pos.y < -6) { this.kill(e, { source: 'fall', dir: _up.clone() }); continue; }
@@ -371,6 +411,48 @@ export class EnemyManager {
     this._separate(dt); this.projectiles.update(dt);
     for (let i = this.enemies.length - 1; i >= 0; i--) { const e = this.enemies[i]; if (!e.alive && e.deadT > 9) { this._removeLaser(e); if (!e.rootDetached) this.ctx.scene.remove(e.root); this.enemies.splice(i, 1); } }
   }
+  // --- network mirror ---
+  // Compact per-enemy state the host sends every few frames; clients ease toward it.
+  snapshot() {
+    const out = [];
+    for (const e of this.enemies) { if (!e.alive) continue; const b = e.body; out.push([e.id, +b.pos.x.toFixed(2), +b.pos.y.toFixed(2), +b.pos.z.toFixed(2), +e.yaw.toFixed(2), STATE_CODES[e.state] ?? 1, Math.round(e.hp), +e.aimAmt.toFixed(2), +e.attackT.toFixed(2), e.fuseT >= 0 ? 1 : 0, e.bossAtk ? 1 : 0]); }
+    return out;
+  }
+  applySnapshot(arr, now) {
+    for (const r of arr) {
+      const e = this.byId.get(r[0]); if (!e || !e.alive) continue;
+      e.snapA = e.snapB || { p: e.body.pos.clone(), yaw: e.yaw, t: now - 0.08 }; e.snapB = { p: new THREE.Vector3(r[1], r[2], r[3]), yaw: r[4], t: now };
+      const st = STATE_NAMES[r[5]] || 'hunt'; if (e.state === 'spawn' && st !== 'spawn') { e.state = st; e.root.scale.setScalar(e.T.scale); } else if (e.state !== 'spawn') e.state = st;
+      e.hp = r[6]; e.aimAmt = r[7]; e.attackT = r[8]; e.fuseT = r[9] ? 0.5 : -1; e.bossAtk = r[10] ? (e.bossAtk || { kind: 'stomp', t: 0.3 }) : null;
+      if (e.T.boss && this.onBoss) this.onBoss(e);
+    }
+  }
+  _updateMirror(dt) {
+    const now = performance.now() / 1000, P = this.ctx.player;
+    for (const e of this.enemies) {
+      e.t += dt;
+      if (!e.alive) { this._updateDead(e, dt); continue; }
+      if (e.flashT > 0) { e.flashT -= dt; if (e.flashT <= 0 && e.flashOn) { setFill(e.mat, false); e.flashOn = false; } }
+      e.flinch = damp(e.flinch, 0, 9, dt);
+      if (e.state === 'spawn') { const f = clamp(e.t / 0.6, 0, 1); e.root.scale.setScalar(Math.max(0.001, f * e.T.scale * (1 + Math.sin(e.t * 60) * 0.12 * (1 - f)))); if (e.t >= 0.6) { e.state = 'hunt'; e.root.scale.setScalar(e.T.scale); } }
+      if (e.snapA && e.snapB) {
+        // render 100 ms behind the newest snapshot so movement stays smooth between packets
+        const span = Math.max(0.02, e.snapB.t - e.snapA.t); const k = clamp((now - 0.1 - e.snapA.t) / span, 0, 1.2);
+        _v.lerpVectors(e.snapA.p, e.snapB.p, k);
+        e.body.vel.subVectors(_v, e.body.pos).divideScalar(Math.max(dt, 1e-3)).clampLength(0, 30);
+        e.body.pos.copy(_v); e.body.onGround = Math.abs(e.body.vel.y) < 0.5;
+        e.yaw = angleLerp(e.snapA.yaw, e.snapB.yaw, k);
+      }
+      e.root.position.copy(e.body.pos); e.root.rotation.y = e.yaw;
+      if (e.T.flying) this._animateFlyer(e, dt); else this._animate(e, dt, P.center);
+      if (e.T.weapon === 'sniper' && e.laser) e.laser.visible = e.aimAmt > 0.9;
+      this._syncHit(e);
+    }
+    this.projectiles.update(dt);
+    for (let i = this.enemies.length - 1; i >= 0; i--) { const e = this.enemies[i]; if (!e.alive && e.deadT > 9) { this._removeLaser(e); if (!e.rootDetached) this.ctx.scene.remove(e.root); this.byId.delete(e.id); this.enemies.splice(i, 1); } }
+  }
+  // the host tells us someone died; run the gore without touching scores
+  killMirror(id, info) { const e = this.byId.get(id); if (!e || !e.alive) return; const cb = this.onKill; this.onKill = null; this.kill(e, { ...info, dir: info.dir ? new THREE.Vector3().fromArray(info.dir) : _up.clone(), point: info.point ? new THREE.Vector3().fromArray(info.point) : e.center.clone() }); this.onKill = cb; }
   _syncHit(e) { e.root.updateMatrixWorld(true); for (let i = 0; i < e.hit.length; i++) e.hitSpheres[i].setFromMatrixPosition(e.parts[e.hit[i][0]].matrixWorld); e.center.setFromMatrixPosition(e.parts.torso.matrixWorld); }
   _updateDead(e, dt) {
     e.deadT += dt; const tp = e.topple; if (!tp || e.rootDetached) return;
@@ -429,7 +511,7 @@ export class EnemyManager {
     }
   }
   _wander(e, dt) { e.body.vel.x = damp(e.body.vel.x, 0, 6, dt); e.body.vel.z = damp(e.body.vel.z, 0, 6, dt); e.aimAmt = damp(e.aimAmt, 0, 5, dt); }
-  _think(e, dt, pp, pc) {
+  _think(e, dt, pp, pc, P) {
     const T = e.T, b = e.body, ctx = this.ctx;
     const dx = pp.x - b.pos.x, dz = pp.z - b.pos.z; const dist = Math.hypot(dx, dz); const dy = pp.y - b.pos.y;
     e.losT -= dt; if (e.losT <= 0) { e.losT = 0.12 + rand(0, 0.1); e.los = ctx.world.hasLineOfSight(this.eye(e, _eye), pc, SEE_THROUGH); }
@@ -463,8 +545,8 @@ export class EnemyManager {
             ctx.effects.tracer(_v, _v2, INK.RED, 0.025, 0.16);
           }
           if (dist < T.reach && Math.abs(dy) < 1.7) {
-            if (ctx.player.tryBlockMelee(e)) { e.state = 'stunned'; e.t = 0; e.stunDur = 1.1; b.vel.set(-dx / dist * 7, 3.5, -dz / dist * 7); }
-            else ctx.player.takeDamage(T.dmg * this.mods.damage, e.center);
+            if (P.tryBlockMelee(e)) { e.state = 'stunned'; e.t = 0; e.stunDur = 1.1; b.vel.set(-dx / dist * 7, 3.5, -dz / dist * 7); }
+            else P.takeDamage(T.dmg * this.mods.damage, e.center);
           } else audio.katanaSwing();
           e.cool = rand(T.cool[0], T.cool[1]); e.backoffT = rand(0.45, 0.75);
         }
@@ -491,13 +573,13 @@ export class EnemyManager {
       } else this._follow(e, dt, pp, T.speed);
       return;
     }
-    if (T.weapon === 'boss') { this._thinkBoss(e, dt, pp, pc, dist, dy, yawTo); return; }
+    if (T.weapon === 'boss') { this._thinkBoss(e, dt, pp, pc, dist, dy, yawTo, P); return; }
     const inRange = e.los && dist < T.range;
     if (inRange) {
       e.aimAmt = damp(e.aimAmt, 1, 8, dt); e.yawT = yawTo;
       let mx = 0, mz = 0; const nx = dx / dist, nz = dz / dist;
       if (T.stationary) { mx = 0; mz = 0; }
-      else if (dist > T.stop * e.keepMul) { this._follow(e, dt, pp, T.speed * 0.8); this._shoot(e, dt, pc); e.yawT = yawTo; return; }
+      else if (dist > T.stop * e.keepMul) { this._follow(e, dt, pp, T.speed * 0.8); this._shoot(e, dt, pc, P); e.yawT = yawTo; return; }
       // if the player is up on something, keep working the route up rather than strafing along
       // a ramp edge and falling off it; they still shoot on the way
       else if (Math.abs(dy) > 1.2) { this._follow(e, dt, pp, T.speed * 0.85); this._shoot(e, dt, pc); e.yawT = yawTo; return; }
@@ -507,7 +589,7 @@ export class EnemyManager {
       const spd = T.weapon === 'shotgun' ? T.speed : T.speed * 0.5;
       if ((mx || mz) && this._groundAhead(e, mx, mz)) { const a = 30 * dt; b.vel.x += clamp(mx * spd - b.vel.x, -a, a); b.vel.z += clamp(mz * spd - b.vel.z, -a, a); }
       else { b.vel.x = damp(b.vel.x, 0, 8, dt); b.vel.z = damp(b.vel.z, 0, 8, dt); }
-      this._shoot(e, dt, pc);
+      this._shoot(e, dt, pc, P);
     } else {
       e.aimAmt = damp(e.aimAmt, 0, 5, dt); e.burstLeft = 0; e.aimT = 0; e.aimPoint = null; this._hideLaser(e);
       if (T.stationary && e.t < 5) { b.vel.x = damp(b.vel.x, 0, 8, dt); b.vel.z = damp(b.vel.z, 0, 8, dt); e.yawT = yawTo; }
@@ -515,15 +597,17 @@ export class EnemyManager {
       if (e.los) e.yawT = yawTo;
     }
   }
-  _thinkBoss(e, dt, pp, pc, dist, dy, yawTo) {
-    const T = e.T, b = e.body, ctx = this.ctx, P = ctx.player;
+  _thinkBoss(e, dt, pp, pc, dist, dy, yawTo, P) {
+    const T = e.T, b = e.body, ctx = this.ctx;
+    if (T.bossKind === 'eraser') return this._thinkEraser(e, dt, pp, pc, dist, dy, yawTo, P);
+    if (T.bossKind === 'inkblot') return this._thinkInkblot(e, dt, pp, pc, dist, dy, yawTo, P);
     if (e.bossAtk) {
       const a = e.bossAtk; a.t += dt; e.yawT = yawTo; b.vel.x = damp(b.vel.x, 0, 5, dt); b.vel.z = damp(b.vel.z, 0, 5, dt);
       if (a.kind === 'stomp') {
         if (a.t > 0.75 && !a.done) {
           a.done = true; audio.stomp(e.center); ctx.effects.shakeAmt += 0.9; ctx.effects.explosion(b.pos.clone().add(_v.set(0, 0.2, 0)), 7, INK.BLACK);
           for (let i = 0; i < 24; i++) { const an = i / 24 * TAU; _v.set(b.pos.x + Math.cos(an) * 3, b.pos.y + 0.3, b.pos.z + Math.sin(an) * 3); _v2.set(Math.cos(an) * 14, 2, Math.sin(an) * 14); ctx.effects._spawn('stroke', _v, _v2, { size: 0.06, life: 0.4, ink: INK.BLACK, gravity: 4, stretch: 0.06, drag: 3 }); }
-          if (P.alive && dist < 7.5 && P.body.pos.y < b.pos.y + 2.5) { P.takeDamage(T.dmg * this.mods.damage, e.center); P.knockback(_d.subVectors(P.center, e.center).normalize(), 9); }
+          for (const t of this.targets()) { const dd = Math.hypot(t.body.pos.x - b.pos.x, t.body.pos.z - b.pos.z); if (t.alive && dd < 7.5 && t.body.pos.y < b.pos.y + 2.5) { t.takeDamage(T.dmg * this.mods.damage, e.center); t.knockback(_d.subVectors(t.center, e.center).normalize(), 9); } }
           this.blastEnemies(b.pos, 6, 60, e);
         }
         if (a.t > 1.3) { e.bossAtk = null; e.cool = rand(T.cool[0], T.cool[1]); }
@@ -538,8 +622,71 @@ export class EnemyManager {
     if (e.los && dist < 14 && Math.abs(dy) < 2) this._steer(e, dt, pp.x, pp.z, T.speed, 30); else this._follow(e, dt, pp, T.speed);
     if (e.los) e.yawT = yawTo;
   }
-  _thinkFlyer(e, dt, pc) {
-    const T = e.T, b = e.body, ctx = this.ctx, P = ctx.player; e.flyT -= dt; e.cool -= dt;
+  // THE ERASER: a rubber brick that charges across the ground, then scrubs the page and calls
+  // in bombers. It wants to be close; keep moving and it skids past you.
+  _thinkEraser(e, dt, pp, pc, dist, dy, yawTo, P) {
+    const T = e.T, b = e.body, ctx = this.ctx; e.aimAmt = damp(e.aimAmt, 0, 6, dt);
+    if (e.bossAtk) {
+      const a = e.bossAtk; a.t += dt;
+      if (a.kind === 'charge') {
+        if (a.t < 0.7) { e.yawT = yawTo; b.vel.x = damp(b.vel.x, 0, 8, dt); b.vel.z = damp(b.vel.z, 0, 8, dt); if (a.t > 0.55 && !a.dir) { a.dir = new THREE.Vector3(pp.x - b.pos.x, 0, pp.z - b.pos.z).normalize(); audio.bossRoar(e.center); } }
+        else if (a.t < 1.9) {
+          b.vel.x = a.dir.x * 17 * this.mods.speed; b.vel.z = a.dir.z * 17 * this.mods.speed;
+          for (const t of this.targets()) { if (!t.alive) continue; const d = Math.hypot(t.body.pos.x - b.pos.x, t.body.pos.z - b.pos.z); if (d < 2.6 && Math.abs(t.body.pos.y - b.pos.y) < 3 && !a.hit) { a.hit = true; t.takeDamage(T.dmg * this.mods.damage, e.center); t.knockback(_d.subVectors(t.center, e.center).setY(0.2).normalize(), 13); ctx.effects.shakeAmt += 0.5; } }
+          if (b.hitWall) { a.t = 1.9; ctx.effects.strokeBurst(e.center, INK.PINK, 30, 9, { life: 0.4, size: 0.05 }); audio.stomp(e.center); ctx.effects.shakeAmt += 0.6; }
+          if (Math.floor(a.t * 10) !== Math.floor((a.t - dt) * 10)) ctx.effects.strokeBurst(b.pos.clone().add(_v.set(0, 0.3, 0)), INK.PINK, 4, 3, { life: 0.35, size: 0.06 });
+        } else { b.vel.x = damp(b.vel.x, 0, 4, dt); b.vel.z = damp(b.vel.z, 0, 4, dt); if (a.t > 2.7) { e.bossAtk = null; e.cool = rand(T.cool[0], T.cool[1]); e.charges = (e.charges || 0) + 1; } }
+      } else {
+        e.yawT = yawTo; b.vel.x = damp(b.vel.x, 0, 6, dt); b.vel.z = damp(b.vel.z, 0, 6, dt);
+        if (a.t > 0.9 && !a.done) {
+          a.done = true; audio.stomp(e.center); ctx.effects.shakeAmt += 0.8;
+          // scrubs the page clean around itself, and the rubbings get up and walk
+          ctx.effects.explosion(b.pos.clone().add(_v.set(0, 0.2, 0)), 6, INK.PINK);
+          const live = this.enemies.filter((x) => x.alive && x.type === 'bomber').length;
+          for (let i = 0; i < 2 && live + i < 4; i++) { const an = rand(0, TAU); const sp = this.spawn('bomber', b.pos.clone().add(_v.set(Math.cos(an) * 3, 0, Math.sin(an) * 3))); sp.state = 'hunt'; sp.root.scale.setScalar(sp.T.scale); }
+          for (const t of this.targets()) { const d = Math.hypot(t.body.pos.x - b.pos.x, t.body.pos.z - b.pos.z); if (t.alive && d < 6.5 && t.body.pos.y < b.pos.y + 3) { t.takeDamage(T.dmg * 0.8 * this.mods.damage, e.center); t.knockback(_d.subVectors(t.center, e.center).normalize(), 9); } }
+        }
+        if (a.t > 1.6) { e.bossAtk = null; e.cool = rand(T.cool[0], T.cool[1]); }
+      }
+      return;
+    }
+    if (e.cool <= 0 && e.los) { if ((e.charges || 0) % 3 === 2 && dist < 12) { e.bossAtk = { kind: 'rub', t: 0, done: false }; e.charges++; return; } if (dist < T.range && dist > 3) { e.bossAtk = { kind: 'charge', t: 0, hit: false, dir: null }; return; } }
+    if (e.los && dist < 16 && Math.abs(dy) < 2) this._steer(e, dt, pp.x, pp.z, T.speed, 30); else this._follow(e, dt, pp, T.speed);
+    if (e.los) e.yawT = yawTo;
+  }
+  // THE INKBLOT: hops around the arena, sprays fans of bursting ink, and shakes wasps loose.
+  _thinkInkblot(e, dt, pp, pc, dist, dy, yawTo, P) {
+    const T = e.T, b = e.body, ctx = this.ctx; e.aimAmt = damp(e.aimAmt, e.los ? 1 : 0, 6, dt);
+    if (e.bossAtk) {
+      const a = e.bossAtk; a.t += dt; e.yawT = yawTo; b.vel.x = damp(b.vel.x, 0, 6, dt); b.vel.z = damp(b.vel.z, 0, 6, dt);
+      if (a.kind === 'spray') {
+        if (a.t > 0.6 && a.shots < 9 && a.t > 0.6 + a.shots * 0.09) {
+          _v.setFromMatrixPosition(e.parts.torso.matrixWorld); _v.y += 0.8;
+          const base = Math.atan2(pp.x - b.pos.x, pp.z - b.pos.z); const an = base + (a.shots - 4) * 0.19;
+          _d.set(Math.sin(an), 0.18 + rand(-0.05, 0.05), Math.cos(an)).normalize();
+          this.projectiles.fire(_v, _d, 20, T.dmg * 0.55 * this.mods.damage, e, INK.BLACK, 0.3, 1); a.shots++; if (a.shots === 1) audio.enemyShot(e.center);
+        }
+        if (a.t > 1.8) { e.bossAtk = null; e.cool = rand(T.cool[0], T.cool[1]); e.sprays = (e.sprays || 0) + 1; }
+      } else {
+        if (a.t > 0.8 && !a.done) {
+          a.done = true; audio.bossRoar(e.center); ctx.effects.strokeBurst(e.center, INK.BLACK, 40, 10, { life: 0.5, size: 0.05 });
+          const live = this.enemies.filter((x) => x.alive && x.type === 'flyer').length;
+          for (let i = 0; i < 3 && live + i < 6; i++) { const sp = this.spawn('flyer', e.center.clone().add(_v.set(rand(-2, 2), 2 + i, rand(-2, 2)))); sp.state = 'hunt'; sp.root.scale.setScalar(sp.T.scale); }
+        }
+        if (a.t > 1.4) { e.bossAtk = null; e.cool = rand(T.cool[0], T.cool[1]); }
+      }
+      return;
+    }
+    // it moves in hops: a big jump toward you every couple of seconds, a slam of ink on landing
+    e.hopT = (e.hopT ?? 1) - dt;
+    if (b.onGround && e.hopT <= 0 && dist > 4) { e.hopT = rand(1.6, 2.4); const nx = (pp.x - b.pos.x) / dist, nz = (pp.z - b.pos.z) / dist; b.vel.set(nx * 11, 13, nz * 11); b.onGround = false; e.hopping = true; }
+    if (e.hopping && b.onGround) { e.hopping = false; audio.stomp(e.center); ctx.effects.shakeAmt += 0.4; ctx.effects.bloodPool(b.pos, 3.5, INK.BLACK); for (const t of this.targets()) { const d = Math.hypot(t.body.pos.x - b.pos.x, t.body.pos.z - b.pos.z); if (t.alive && d < 4.5 && Math.abs(t.body.pos.y - b.pos.y) < 2.5) { t.takeDamage(T.dmg * 0.7 * this.mods.damage, e.center); t.knockback(_d.subVectors(t.center, e.center).normalize(), 8); } } }
+    if (e.cool <= 0 && e.los) { if ((e.sprays || 0) % 3 === 2) { e.bossAtk = { kind: 'summon', t: 0, done: false }; e.sprays++; return; } if (dist < T.range) { e.bossAtk = { kind: 'spray', t: 0, shots: 0 }; return; } }
+    if (!e.hopping) { if (e.los && dist < 14 && Math.abs(dy) < 2) this._steer(e, dt, pp.x, pp.z, T.speed, 30); else this._follow(e, dt, pp, T.speed); }
+    if (e.los) e.yawT = yawTo;
+  }
+  _thinkFlyer(e, dt, pc, P) {
+    const T = e.T, b = e.body, ctx = this.ctx; e.flyT -= dt; e.cool -= dt;
     const want = _v2;
     if (e.flyState === 'stunned') { b.vel.y -= 20 * dt; if (b.onGround || e.t > 2.2) { e.flyState = 'climb'; e.flyT = 1.2; e.state = 'hunt'; } }
     else if (e.flyState === 'orbit') {
@@ -564,7 +711,7 @@ export class EnemyManager {
     _d.copy(b.vel); if (_d.lengthSq() > 0.1) e.yawT = Math.atan2(_d.x, _d.z);
   }
   _flyTo(e, target, speed, accel, dt) { const b = e.body; _d.subVectors(target, b.pos); const l = _d.length(); if (l < 0.3) { b.vel.multiplyScalar(Math.max(0, 1 - 4 * dt)); return; } _d.divideScalar(l).multiplyScalar(speed * this.mods.speed); _v3.subVectors(_d, b.vel); const m = _v3.length(); if (m > accel * dt) _v3.multiplyScalar(accel * dt / m); b.vel.add(_v3); }
-  _shoot(e, dt, pc) {
+  _shoot(e, dt, pc, P) {
     const T = e.T, ctx = this.ctx; const muzzle = _v.setFromMatrixPosition(e.tip.matrixWorld);
     if (T.weapon === 'sniper') {
       if (e.cool > 0) { this._hideLaser(e); return; }
@@ -577,14 +724,14 @@ export class EnemyManager {
       if (e.aimT > T.aimTime * 0.5 && !e.aimWarned) { e.aimWarned = true; audio.sniperAim(e.center); }
       if (e.aimT >= T.aimTime) {
         e.aimT = 0; e.aimWarned = false; e.cool = rand(T.cool[0], T.cool[1]);
-        this._fireOne(e, muzzle, e.aimPoint, T.spread, T.pspeed, T.dmg, 0.07); audio.sniperShot(e.center);
+        this._fireOne(e, muzzle, e.aimPoint, T.spread, T.pspeed, T.dmg, 0.07, P); audio.sniperShot(e.center);
         this._hideLaser(e); e.aimPoint = null;
       }
       return;
     }
-    if (e.burstLeft > 0) { e.burstT -= dt; if (e.burstT <= 0) { e.burstT = T.burstInt; e.burstLeft--; this._fireOne(e, muzzle, pc, T.spread, T.pspeed, T.dmg, 0.045); audio.enemyShot(e.center); if (e.burstLeft === 0) e.cool = rand(T.cool[0], T.cool[1]); } return; }
+    if (e.burstLeft > 0) { e.burstT -= dt; if (e.burstT <= 0) { e.burstT = T.burstInt; e.burstLeft--; this._fireOne(e, muzzle, pc, T.spread, T.pspeed, T.dmg, 0.045, P); audio.enemyShot(e.center); if (e.burstLeft === 0) e.cool = rand(T.cool[0], T.cool[1]); } return; }
     if (e.cool <= 0) {
-      if (T.weapon === 'shotgun') { for (let i = 0; i < T.pellets; i++) this._fireOne(e, muzzle, pc, T.spread, T.pspeed * rand(0.85, 1.1), T.dmg, 0.05); audio.shotgun(e.center); e.cool = rand(T.cool[0], T.cool[1]); ctx.effects.strokeBurst(muzzle, INK.ORANGE, 8, 5, { life: 0.1, size: 0.04 }); }
+      if (T.weapon === 'shotgun') { for (let i = 0; i < T.pellets; i++) this._fireOne(e, muzzle, pc, T.spread, T.pspeed * rand(0.85, 1.1), T.dmg, 0.05, P); audio.shotgun(e.center); e.cool = rand(T.cool[0], T.cool[1]); ctx.effects.strokeBurst(muzzle, INK.ORANGE, 8, 5, { life: 0.1, size: 0.04 }); }
       else { e.burstLeft = T.burst; e.burstT = 0; }
     }
   }
@@ -603,8 +750,7 @@ export class EnemyManager {
   }
   _hideLaser(e) { if (e.laser) e.laser.visible = false; }
   _removeLaser(e) { if (e.laser) { this.ctx.scene.remove(e.laser); e.laser.geometry.dispose(); e.laser = null; } }
-  _fireOne(e, muzzle, pc, spread, speed, dmg, thick) {
-    const P = this.ctx.player; _d.subVectors(pc, muzzle); _d.y += rand(-0.2, 0.3); _d.normalize();
+  _fireOne(e, muzzle, pc, spread, speed, dmg, thick, P = this.ctx.player) { _d.subVectors(pc, muzzle); _d.y += rand(-0.2, 0.3); _d.normalize();
     const sp = spread * (1 + P.speed * 0.06); _d.x += rand(-sp, sp); _d.y += rand(-sp, sp); _d.z += rand(-sp, sp); _d.normalize();
     this.projectiles.fire(muzzle, _d, speed, dmg * this.mods.damage, e, INK.RED, thick); this.ctx.effects.strokeBurst(muzzle, INK.ORANGE, 4, 4, { life: 0.07, size: 0.03 });
   }
@@ -620,7 +766,7 @@ export class EnemyManager {
     e.phase += dt * (sp * 2.2 + (sp > 0.4 ? 3 : 0)); const s = Math.sin(e.phase), c = Math.cos(e.phase);
     J.legL.rotation.x = s * 0.9 * w; J.legR.rotation.x = -s * 0.9 * w; J.shinL.rotation.x = Math.max(0, c) * 1.1 * w; J.shinR.rotation.x = Math.max(0, -c) * 1.1 * w;
     if (!b.onGround) { J.legL.rotation.x = -0.5; J.legR.rotation.x = 0.6; J.shinL.rotation.x = 1.0; J.shinR.rotation.x = 0.5; }
-    if (T.weapon === 'bomb') {
+    if (T.weapon === 'bomb' || T.model === 'blob') {
       J.armL.rotation.x = -2.4 + Math.sin(e.t * 20) * 0.4 * w; J.armR.rotation.x = -2.4 - Math.sin(e.t * 20) * 0.4 * w; J.torso.rotation.z = Math.sin(e.phase) * 0.12 * w; J.torso.rotation.x = -0.15 * w;
       if (J.spark) J.spark.scale.setScalar(0.7 + Math.random() * 0.8 + (e.fuseT >= 0 ? 1.5 : 0)); J.hips.position.y = 0.5 + Math.abs(c) * 0.08 * w;
       if (e.fuseT >= 0) { J.torso.rotation.x = Math.sin(e.t * 40) * 0.15; J.headG.rotation.y = Math.sin(e.t * 30) * 0.3; }
