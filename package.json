@@ -1,0 +1,16 @@
+{
+  "name": "doodleshooter",
+  "version": "1.0.0",
+  "description": "A first-person survival shooter drawn in blue ballpoint on lined notebook paper",
+  "type": "module",
+  "scripts": {
+    "dev": "python3 serve.py 8910",
+    "serve": "python3 serve.py 8910"
+  },
+  "keywords": ["game", "three.js", "webgl"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@vercel/analytics": "^1.3.1"
+  }
+}
