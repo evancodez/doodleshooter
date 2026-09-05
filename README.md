@@ -19,15 +19,13 @@ then open http://127.0.0.1:8910. On Vercel (or any static host) just deploy the 
 
 ## Modes
 
-- **Solo**: survive the waves alone. Bosses every fifth wave, checkpoints unlock at wave 5, 10, 15...
-- **Co-op**: the same waves with up to eight friends on one team. Waves scale with the head count.
-- **Team deathmatch**: two teams, first to 30.
-- **Free for all**: everyone is fair game, first to 20.
+- **Solo**: survive the waves. Bosses every fifth wave, checkpoints unlock at wave 5, 10, 15...
+- **Free for all**: up to eight players, first to 20 kills, with an eight minute cap.
 
 Multiplayer is peer-to-peer over WebRTC (PeerJS), so it works from a static host with no game
-server. One player hosts a lobby and gets a code to share; friends type it in to join. A lobby
-marked public can be found with **quick play**. The host's browser runs the enemies and the waves;
-each player is authoritative over their own body and health.
+server. Under PLAY ONLINE you can Quick Play (joins an open public lobby, or opens one for you),
+create a public or private lobby, or join a friend's lobby with their five letter code. People can
+join a match already in progress. The host's browser keeps score; each player runs their own body.
 
 ## Controls
 
@@ -52,13 +50,11 @@ On-screen hints follow whichever device you touched last.
 
 Rifle, shotgun, revolver, sniper (with scope) and a katana. Holding block with the katana parries
 some incoming bullets and returns a share of them. Katana kills charge a gauge; when it is lit you
-can dash to a marked enemy and execute it. In solo the dash slows time; in co-op it does not; in
-PvP it is off. Grenades bounce, then go off in a thick orange blast that scorches the paper.
+can dash to a marked enemy and execute it (solo only). Grenades bounce, then go off in a thick orange blast that scorches the paper.
 
-## Maps
+## Map
 
-- **Doodle District**: streets, rooftops and fire escapes.
-- **Paper Canyon**: an ink river, terraced cliffs, a rope bridge, a fallen pencil and a pipe to swing from.
+Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots.
 
 ## Enemies
 

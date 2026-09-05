@@ -158,3 +158,35 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 .checkpoints button:hover { background: var(--ink); color: var(--paper); }
 .namebox { font: inherit; font-size: 20px; width: 150px; color: var(--ink); border: 2px solid var(--ink); border-radius: 6px 8px 5px 7px; background: transparent; padding: 2px 8px; }
 #hud.pad .kbonly, #hud:not(.pad) .padonly { display: none; }
+
+/* ---- main menu, online panel, scoreboard overlay ---- */
+.mainbtns { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin: 14px 0 6px; }
+.mainbtns button { font: inherit; font-size: 30px; color: var(--paper); background: var(--ink); border: 3px solid var(--ink); border-radius: 9px 13px 8px 12px / 12px 8px 11px 9px; padding: 10px 34px; cursor: pointer; transform: rotate(-.8deg); line-height: 1.05; }
+.mainbtns button i { display: block; font-style: normal; font-size: 16px; opacity: .8; letter-spacing: 1px; }
+.mainbtns button:nth-child(2) { transform: rotate(.7deg); background: var(--red); border-color: var(--red); }
+.mainbtns button:hover { filter: brightness(1.15); }
+.online { display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 6px; }
+.online .sub { font-size: 19px; opacity: .75; }
+.online .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.online .row.split { gap: 26px; }
+.online button { font: inherit; font-size: 22px; color: var(--paper); background: var(--ink); border: 2.5px solid var(--ink); border-radius: 7px 10px 6px 9px / 10px 6px 9px 7px; padding: 6px 18px; cursor: pointer; }
+.online button.alt { color: var(--ink); background: transparent; }
+.online button.big { font-size: 26px; padding: 8px 26px; transform: rotate(-.6deg); }
+.online button:disabled { opacity: .4; cursor: default; }
+.online button:hover:not(:disabled) { filter: brightness(1.15); }
+.online input[type=text] { font: inherit; font-size: 26px; width: 150px; text-align: center; letter-spacing: 5px; text-transform: uppercase; color: var(--ink); border: 2.5px solid var(--ink); border-radius: 6px 9px 6px 8px; background: transparent; padding: 3px 6px; }
+.online input.namebox { letter-spacing: 0; text-transform: none; font-size: 22px; width: 180px; }
+.online .radio { display: flex; gap: 14px; font-size: 19px; }
+.online .radio label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+.online .status { min-height: 26px; font-size: 20px; color: var(--red); }
+.online .hint { font-size: 17px; opacity: .7; max-width: 520px; text-align: center; }
+.online .code { font-size: 52px; letter-spacing: 10px; }
+.online .plist { min-width: 340px; }
+.online .plist .host span:first-child::after { content: ' · host'; opacity: .6; font-size: 16px; }
+.online .plist .me { background: rgba(26,48,192,.08); }
+.board { position: absolute; left: 50%; top: 18%; transform: translateX(-50%) rotate(-.5deg); background: rgba(250,247,238,.94); border: 3px solid var(--ink); border-radius: 12px 16px 10px 14px / 14px 10px 16px 12px; padding: 12px 22px; min-width: 380px; font-size: 24px; color: var(--ink); z-index: 5; }
+.board h3 { margin: 0 0 6px; font-size: 30px; text-align: center; letter-spacing: 2px; }
+.board div { display: flex; justify-content: space-between; gap: 24px; padding: 2px 8px; border-bottom: 1.5px solid rgba(26,48,192,.25); }
+.board div.me { background: rgba(26,48,192,.1); }
+.board .foot { font-size: 16px; opacity: .7; justify-content: center; border: 0; margin-top: 6px; }
+.feed { color: var(--red); }
