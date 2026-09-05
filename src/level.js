@@ -89,7 +89,7 @@ function createBuilder(scene, world) {
       const g = new THREE.ConeGeometry(1.2 * sc, 4 * sc, 3); g.rotateX(Math.PI / 2);
       const m = new THREE.Mesh(g, makeInkMaterial({ ink: o.ink ?? INK.BLUE })); scene.add(m); L.meshes.push(m);
       L.grappleMovers.push({ mesh: m, radius: 2.2 * sc });
-      const r = baseR + i * (o.rStep ?? 12), h = baseH + i * (o.hStep ?? 6), ph = i * 2.1, sp = (o.speed ?? 0.07) + i * 0.012;
+      const r = baseR + i * (o.rStep ?? 12), h = baseH + i * (o.hStep ?? 6), ph = i * 2.1, sp = (o.speed ?? 0.11) + i * 0.01;
       L.animated.push({ mesh: m, update: (t) => { const a = t * sp + ph; m.position.set(Math.cos(a) * r, h + Math.sin(a * 2.3) * 3, Math.sin(a) * r * 0.7); m.lookAt(Math.cos(a + 0.05) * r, h + Math.sin((a + 0.05) * 2.3) * 3, Math.sin(a + 0.05) * r * 0.7); m.rotateZ(Math.sin(a * 3) * 0.6); } });
     }
   }
@@ -134,7 +134,7 @@ function buildDistrict(B, arena = false) {
     const pad = (x, y, z, w, d) => { box(x, y, z, w, 0.5, d, { noNav: true }); cable(x, y + 0.5, z); ring(x, y - 1.3, z, 'y'); };
     for (const [x, y, z, w, d] of [[0, 24, 0, 8, 8], [-42, 18, -24, 6, 6], [44, 21, 30, 6, 6], [28, 27, -46, 5, 5], [-30, 30, 44, 5, 5]]) pad(x, y, z, w, d);
     // paper planes big enough to hook: they loop around the map at different heights
-    planes(4, 30, 18, { scale: 1.7, rStep: 9, hStep: 5, speed: 0.06, ink: INK.BLUE });
+    planes(4, 30, 26, { scale: 1.7, rStep: 9, hStep: 6, speed: 0.11, ink: INK.BLUE });
   }
 
   // ---------------- central tower (solo only: a match wants the field open) ----------------
@@ -298,7 +298,7 @@ function buildDistrict(B, arena = false) {
 
   L.teamSpawns = [[-40, 0, 18], [-34, 12, 12], [-48, 7, -30], [-52, 0, 30], [-30, 7, -48]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
   L.teamSpawns = [L.teamSpawns, [[40, 0, 8], [34, 12, 18], [48, 7, -30], [52, 0, 30], [16, 7, -45]].map(([x, y, z]) => new THREE.Vector3(x, y, z))];
-  if (!arena) planes(3, 30, 24, { rStep: 8, hStep: 5, scale: 1.4 });
+  if (!arena) planes(3, 30, 30, { rStep: 8, hStep: 6, scale: 1.4 });
   return B.finish();
 }
 

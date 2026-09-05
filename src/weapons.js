@@ -159,6 +159,7 @@ export class Gun extends ViewModel {
     } else if (hitW) { end = hitW.point; ctx.effects.bulletImpact(hitW.point, hitW.normal, INK.BLUE); if (Math.random() < 0.25) audio.ricochet(hitW.point); }
     else end = origin.clone().addScaledVector(dir, 300);
     this.muzzle.getWorldPosition(_v); ctx.effects.tracer(_v, end, INK.BLUE, this.tracer, 0.05);
+    if (ctx.onShot) ctx.onShot(end);
     return hit;
   }
   _ejectShell(spread = 1) {

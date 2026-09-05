@@ -113,6 +113,11 @@ ctx.cutRopes = (eye, dir, range) => {
   return cut;
 };
 const _v = new THREE.Vector3();
+// every ray a gun fires this tick is sent to the others, who draw it as a tracer from the shooter's gun
+const shotQueue = [];
+ctx.onShot = (end) => { if (net.active && inMatch()) shotQueue.push(+end.x.toFixed(1), +end.y.toFixed(1), +end.z.toFixed(1)); };
+const TRACER_THICK = { rifle: 0.02, shotgun: 0.014, sniper: 0.03 };
+const _sm = new THREE.Vector3(), _se = new THREE.Vector3();
 
 // ---------------- pickups ----------------
 const pickups = []; let pickupId = 1;
@@ -417,6 +422,13 @@ net.on('pdead', (d, from) => {
   if (net.isHost) tallyDeath(from, d.killer);
 });
 net.on('nade', (d) => player.throwGrenade(d));
+net.on('shots', (d, from) => {
+  const r = remote.get(from); if (!r || !r.root || !r.alive) return;
+  _sm.set(r.body.pos.x + r.right.x * 0.3 + r.forward.x * 0.8, r.body.pos.y + 1.35 + r.forward.y * 0.8, r.body.pos.z + r.right.z * 0.3 + r.forward.z * 0.8);
+  const th = TRACER_THICK[d.k] || 0.02; const e = d.e || [];
+  for (let i = 0; i + 2 < e.length; i += 3) { _se.set(e[i], e[i + 1], e[i + 2]); effects.tracer(_sm, _se, INK.BLUE, th, 0.06); }
+  r.flash();
+});
 net.on('cut', () => { if (player.grapple.state !== 'idle') { player.detachGrapple(false); effects.strokeBurst(player.center, INK.ORANGE, 8, 4, { life: 0.25, size: 0.03 }); hud.tip('your rope got cut', 1.3); input.rumble(0.5, 0.3, 80); } });
 net.on('score', (rows) => { if (!net.isHost) applyScores(rows); });
 
@@ -425,6 +437,7 @@ function netUpdate(dt) {
   if (!net.active) return; const now = performance.now() / 1000; syncTick++;
   for (const r of remote.values()) r.update(dt, now);
   if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing }), true);
+  if (shotQueue.length) net.broadcast('shots', { k: player.weapon.kind, e: shotQueue.splice(0) });
   if (net.isHost && inMatch() && !game.over) { game.matchT += dt; if (game.matchT > FFA_TIME) { const rows = sortedScores(); const w = rows.length ? { id: rows[0][0], name: rows[0][1].name } : { id: net.id, name: myName }; net.send('end', w); endMatch(w); } }
 }
 function leaveOnline(reason) {
