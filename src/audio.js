@@ -56,6 +56,12 @@ class Sfx {
     this.noise({ dur: 0.06, gain: 0.45, type: 'highpass', freq: 2800 });
     this.tone({ freq: 160, freqEnd: 40, dur: 0.15, gain: 0.6, type: 'triangle' });
   }
+  // another player's gun, heard from where they stand: a bit hotter than a bot's so it cuts through
+  remoteShot(kind, pos) {
+    if (kind === 'shotgun') { this.noise({ dur: 0.32, gain: 1.0, type: 'lowpass', freq: 1600, freqEnd: 150, pos }); this.tone({ freq: 95, freqEnd: 30, dur: 0.26, gain: 0.7, type: 'triangle', pos }); }
+    else if (kind === 'sniper') { this.noise({ dur: 0.4, gain: 1.0, type: 'bandpass', freq: 750, freqEnd: 120, q: 0.5, pos }); this.tone({ freq: 420, freqEnd: 50, dur: 0.32, gain: 0.5, type: 'sawtooth', pos }); }
+    else { this.noise({ dur: 0.16, gain: 0.85, type: 'bandpass', freq: rand(1000, 1500), freqEnd: 220, q: 0.8, pos }); this.noise({ dur: 0.05, gain: 0.4, type: 'highpass', freq: 2600, pos }); this.tone({ freq: 200, freqEnd: 50, dur: 0.12, gain: 0.45, type: 'square', pos }); }
+  }
   enemyShot(pos) {
     this.noise({ dur: 0.14, gain: 0.5, type: 'bandpass', freq: rand(900, 1500), freqEnd: 200, q: 0.8, pos });
     this.tone({ freq: 220, freqEnd: 60, dur: 0.1, gain: 0.3, type: 'square', pos });

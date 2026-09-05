@@ -293,15 +293,15 @@ export class Player {
     }
   }
   explodeNade(n) {
-    const ctx = this.ctx, R = 5.2, c = n.pos.clone(); c.y += 0.25;
+    const ctx = this.ctx, R = 6.4, c = n.pos.clone(); c.y += 0.25;
     ctx.effects.boom(c, R); audio.explosion(c); ctx.input.rumble(0.9, 0.9, 220);
     // bots: the thrower's client reports the damage (host applies it; a client's report is forwarded)
     if (n.mine) ctx.enemies.blastEnemies(c, R, 120, null);
     // me: my own grenade, or anyone else's that went off on my screen
     const d = this.center.distanceTo(c);
-    if (this.alive && d < R * 0.85) { this.takeDamage(48 * (1 - d / (R * 0.85)), c); this.knockback(_v.subVectors(this.center, c).normalize(), 9); }
+    if (this.alive && d < R * 0.95) { this.takeDamage(10 + 34 * (1 - d / (R * 0.95)), c); this.knockback(_v.subVectors(this.center, c).normalize(), 9); }
     // other players in a versus match, decided by the thrower only
-    if (n.mine && ctx.targets) for (const t of ctx.targets()) { if (t.isLocal || !t.alive || (ctx.canHurt && !ctx.canHurt(t))) continue; const dd = t.center.distanceTo(c); if (dd < R * 0.85) t.takeDamage(80 * (1 - dd / (R * 0.85)), c); }
+    if (n.mine && ctx.targets) for (const t of ctx.targets()) { if (t.isLocal || !t.alive || (ctx.canHurt && !ctx.canHurt(t))) continue; const dd = t.center.distanceTo(c); if (dd < R * 0.95) t.takeDamage(12 + 50 * (1 - dd / (R * 0.95)), c); }
   }
   _weaponState(sprinting, aiming, hs) {
     const inp = this.ctx.input, b = this.body;
@@ -392,7 +392,7 @@ export class Player {
       g.flyT += dt; const f = Math.min(1, g.flyT / g.flyDur); g.hook.lerpVectors(g.from, g.anchor, f);
       if (f >= 1) {
         if (g.enemy) { if (g.enemy.alive) { ctx.enemies.yank(g.enemy, this.center); ctx.game.addScore(30, 'YANKED'); audio.grappleHit(); ctx.input.rumble(0.5, 0.5, 90); } this.detachGrapple(false); }
-        else { g.state = 'on'; g.len = Math.max(1.5, this.center.distanceTo(g.anchor) * 0.94); g.blockedT = 0; g.t = 0; g.swingT = 0; audio.grappleHit(); audio.reelLoop(true); ctx.hud.grappleTarget(2); ctx.input.rumble(0.3, 0.6, 60); if (b.onGround) { b.vel.y = Math.max(b.vel.y, 7); b.onGround = false; g.hopT = 0.3; } }
+        else { g.state = 'on'; g.len = Math.max(1.5, this.center.distanceTo(g.anchor) * 0.94); g.blockedT = 0; g.t = 0; g.swingT = 0; audio.grappleHit(); audio.reelLoop(true); ctx.hud.grappleTarget(2); ctx.input.rumble(0.3, 0.6, 60); if (b.onGround) { b.vel.y = Math.max(b.vel.y, 5); b.onGround = false; } }
       }
     } else if (g.state === 'on') {
       if (g.mover) g.anchor.copy(g.mover.mesh.position);
@@ -409,8 +409,7 @@ export class Player {
         const excess = Math.min(dist - g.len, 0.35) * 0.85; b.pos.addScaledVector(_d, excess);
         if (ctx.world.overlapsBody(b)) b.pos.addScaledVector(_d, -excess);
       }
-      // a rope never drags you along the floor: touching the ground while hooked bounces you back into the swing
-      g.hopT -= dt; if (b.onGround && g.hopT <= 0 && (reeling || _d.y > -0.15)) { b.vel.y = Math.max(b.vel.y, reeling ? 7.5 : 6); b.onGround = false; g.hopT = 0.3; audio.jump(); }
+      if (b.onGround && reeling && _d.y > 0.2) { b.vel.y = Math.max(b.vel.y, 4.5); b.onGround = false; }
       g.t += dt; if (g.t > 0.15) { g.t = 0; if (!ctx.world.hasLineOfSight(this.eye, g.anchor)) g.blockedT += 0.15; else g.blockedT = 0; }
       if (inp.pressed('grapple') || dist < 1.3 || g.blockedT > 0.3 || dist > 90 || (b.onGround && g.swingT > 0.6 && !reeling)) this.detachGrapple(dist < 1.3);
     }
