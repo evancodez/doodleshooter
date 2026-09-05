@@ -616,7 +616,8 @@ function tick(now) { requestAnimationFrame(tick); step(now); }
 // match, so a coarse timer runs extra steps (never extra frame chains) while that happens
 setInterval(() => { if (net.active && performance.now() - last > 300) step(performance.now()); }, 250);
 function step(now) {
-  const starved = now - last > 200; const dt = Math.min(starved ? 0.25 : 0.05, (now - last) / 1000); last = now;
+  // never more than 50 ms a step: a bigger jump (a tab coming back) makes the springs in the view model fly apart
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
   input.update(dt);
   const st = game.state; const playing = st === 'play' || st === 'dying';
   if (st === 'start' || st === 'pause' || st === 'dead') { if (input.pressed('jump') || input.pressed('confirm') || (st === 'pause' && input.pressed('pause'))) hud.onScreenClick(); }

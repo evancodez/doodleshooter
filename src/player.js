@@ -5,7 +5,7 @@ import { makeInkMaterial, INK } from './render.js';
 import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
 // the dome shell and anything else flagged this way cannot be hooked
 const NO_GRAPPLE = (b) => !!b.data.noGrapple;
-const STAM_FIRE = 0.12, STAM_DRAIN = 0.16, STAM_GROUND = 0.34, STAM_AIR = 0.09, STAM_MIN = 0.2, PARRY_WINDOW = 0.55;
+const STAM_FIRE = 0.07, STAM_DRAIN = 0.09, STAM_GROUND = 0.45, STAM_AIR = 0.16, STAM_MIN = 0.1, PARRY_WINDOW = 0.55;
 import { clamp, damp, rand, Spring, alignYAxis } from './util.js';
 import { audio } from './audio.js';
 
@@ -342,7 +342,7 @@ export class Player {
     let mBest = null, mLat = Infinity;
     for (const mv of ctx.level.grappleMovers || []) {
       _v.subVectors(mv.mesh.position, o); const t = _v.dot(d); if (t < 2 || t > Math.min(maxD, wallDist + 1)) continue;
-      const lat = Math.sqrt(Math.max(0, _v.lengthSq() - t * t)); if (lat < mv.radius + 0.8 + t * 0.04 && lat < mLat) { mLat = lat; mBest = { point: mv.mesh.position.clone(), mover: mv, dist: t }; }
+      const lat = Math.sqrt(Math.max(0, _v.lengthSq() - t * t)); if (lat < mv.radius + 0.3 + t * 0.012 && lat < mLat) { mLat = lat; mBest = { point: mv.mesh.position.clone(), mover: mv, dist: t }; }
     }
     if (mBest) return mBest;
     // near miss on an enemy: forgiving, but it has to be roughly where you are pointing
@@ -371,7 +371,7 @@ export class Player {
     return null;
   }
   _fireGrapple() {
-    if (this.grapStam < STAM_MIN) { audio.empty(); this.ctx.hud.tip('grapple needs a breather', 0.9); return; }
+    if (this.grapStam < STAM_MIN) { audio.winded(); this.ctx.hud.tip('grapple needs a breather', 0.9); return; }
     const t = this._findGrappleTarget(); if (!t) { audio.empty(); return; }
     this.grapStam -= STAM_FIRE;
     const g = this.grapple; g.state = 'fly'; g.anchor.copy(t.point); this._handPos(g.from); g.hook.copy(g.from); g.flyT = 0; g.flyDur = clamp(t.dist / 110, 0.04, 0.6); g.enemy = t.enemy || null; g.mover = t.mover || null; g.t = 0;

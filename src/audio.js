@@ -70,6 +70,7 @@ class Sfx {
   }
   sniperAim(pos) { this.tone({ freq: 1800, dur: 0.12, gain: 0.12, type: 'sine', pos }); }
   empty() { this.noise({ dur: 0.03, gain: 0.3, type: 'highpass', freq: 3000 }); }
+  winded() { this.tone({ freq: 220, freqEnd: 140, dur: 0.14, gain: 0.1, type: 'triangle' }); }
   reload() {
     this.noise({ dur: 0.04, gain: 0.35, type: 'highpass', freq: 2500 });
     this.noise({ dur: 0.12, gain: 0.2, type: 'bandpass', freq: 600, q: 2, delay: 0.25 });
@@ -154,24 +155,32 @@ class Sfx {
   shieldHit(pos) { this.tone({ freq: rand(600, 800), freqEnd: 300, dur: 0.12, gain: 0.2, type: 'square', pos }); this.noise({ dur: 0.05, gain: 0.3, type: 'highpass', freq: 3000, pos }); }
   airdrop() { this.tone({ freq: 660, dur: 0.15, gain: 0.15, type: 'triangle' }); this.tone({ freq: 880, dur: 0.2, gain: 0.15, type: 'triangle', delay: 0.15 }); }
   crateLand(pos) { this.noise({ dur: 0.3, gain: 0.6, type: 'lowpass', freq: 500, freqEnd: 80, pos }); }
-  // ---------- music: procedural lo-fi beat ----------
+  // ---------- music: an 8-bit theme, two pulse voices, a triangle bass, an arpeggio and drums ----------
   musicOn(on) {
     if (!this.ctx) return;
-    if (on && !this._mus) { this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.16; this.musicGain.connect(this.master); this._mus = { step: 0, next: this.ctx.currentTime + 0.1, timer: setInterval(() => this._musicTick(), 90) }; }
+    if (on && !this._mus) { this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.13; this.musicGain.connect(this.master); this._mus = { step: 0, next: this.ctx.currentTime + 0.1, timer: setInterval(() => this._musicTick(), 80) }; }
     else if (!on && this._mus) { clearInterval(this._mus.timer); this._mus = null; if (this.musicGain) this.musicGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2); }
   }
   get musicPlaying() { return !!this._mus; }
   setIntensity(v) { this._intensity = clamp(v, 0, 1); }
   _musicTick() {
-    const ctx = this.ctx, m = this._mus; if (!m) return; const I = this._intensity || 0; const bpm = 104 + 16 * I; const stepDur = 60 / bpm / 2; const out = this.musicGain;
-    while (m.next < ctx.currentTime + 0.3) {
-      const s = m.step % 16, t = m.next; const bar = Math.floor(m.step / 16) % 4; const roots = [55, 43.65, 65.41, 49];
-      if (s % 4 === 0 || (I > 0.5 && s === 14) || (I > 0.8 && s === 7)) { this.tone({ freq: 150, freqEnd: 40, dur: 0.16, gain: 0.9, type: 'sine', at: t, out }); }
-      if (s === 4 || s === 12) { this.tone({ freq: 190, freqEnd: 120, dur: 0.1, gain: 0.3, type: 'triangle', at: t, out }); this._noiseAt(t, 0.12, 0.5, 'bandpass', 1900, out); }
-      if (s % 2 === 0 || I > 0.35) this._noiseAt(t, 0.03, s % 4 === 2 ? 0.28 : 0.16, 'highpass', 7000, out);
-      if (s % 4 === 0 || s === 6 || s === 11) this.tone({ freq: roots[bar] * (s === 11 ? 1.5 : 1), dur: stepDur * 1.7, gain: 0.55, type: 'triangle', at: t, out });
-      if (I > 0.15 && (s === 3 || s === 7 || s === 10 || s === 15) && Math.random() < 0.55) this.tone({ freq: roots[bar] * choose([2, 3, 4, 6]) * (Math.random() < 0.5 ? 1 : 1.5), dur: 0.22, gain: 0.16, type: 'square', at: t, out });
-      m.next += stepDur; m.step++;
+    const ctx = this.ctx, m = this._mus; if (!m) return; const I = this._intensity || 0; const out = this.musicGain;
+    const bpm = 156, step = 60 / bpm / 4; const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    while (m.next < ctx.currentTime + 0.35) {
+      const t = m.next, i = m.step % TUNE.length, bar = Math.floor(i / 16) % 8, s16 = i % 16;
+      const chord = TUNE.chords[bar]; const root = chord[0];
+      // lead: pulse, with a soft octave shadow on the second half of the loop for lift
+      const n = TUNE.lead[i];
+      if (n > 0) { const len = TUNE.len[i] * step; this.tone({ freq: midi(n), dur: len * 0.92, gain: 0.11, type: 'square', at: t, out }); if (m.step % (TUNE.length * 2) >= TUNE.length) this.tone({ freq: midi(n + 12), dur: len * 0.6, gain: 0.03, type: 'square', at: t, out }); }
+      // bass: root with octave and fifth bounces on eighth notes
+      if (s16 % 2 === 0) { const b = [0, 0, 12, 0, 0, 7, 0, 12][s16 / 2]; this.tone({ freq: midi(root - 12 + b), dur: step * 1.6, gain: 0.16, type: 'triangle', at: t, out }); }
+      // arpeggio: chord tones on every sixteenth, quiet
+      { const tones = [root, root + chord[1], root + 7, root + 12]; this.tone({ freq: midi(tones[s16 % 4] + 12), dur: step * 0.8, gain: 0.03 + I * 0.02, type: 'square', at: t, out }); }
+      // drums: kick, snare, hats; more hats and a ghost kick when things heat up
+      if (s16 === 0 || s16 === 8 || (I > 0.5 && s16 === 10) || (s16 === 14 && bar % 4 === 3)) this.tone({ freq: 160, freqEnd: 45, dur: 0.12, gain: 0.8, type: 'sine', at: t, out });
+      if (s16 === 4 || s16 === 12) this._noiseAt(t, 0.11, 0.42, 'bandpass', 2200, out);
+      if (s16 % 2 === 0 || I > 0.4) this._noiseAt(t, s16 % 4 === 2 ? 0.05 : 0.025, s16 % 4 === 2 ? 0.2 : 0.12, 'highpass', 8000, out);
+      m.next += step; m.step++;
     }
   }
   _noiseAt(t0, dur, gain, type, freq, out) {
@@ -181,4 +190,18 @@ class Sfx {
     src.connect(f); f.connect(env); env.connect(out); src.start(t0, Math.random() * 1.5); src.stop(t0 + dur + 0.05);
   }
 }
+
+// ---------- the theme: eight bars, sixteenth grid ----------
+const N = (...pairs) => { const notes = [], lens = []; for (let k = 0; k < pairs.length; k += 2) { notes.push(pairs[k]); lens.push(pairs[k + 1]); for (let j = 1; j < pairs[k + 1]; j++) { notes.push(0); lens.push(0); } } return { notes, lens }; };
+const BARS = [
+  N(76, 2, 79, 2, 84, 4, 83, 2, 84, 2, 79, 4),          // C: bright leap up
+  N(74, 2, 76, 2, 79, 4, 81, 2, 79, 2, 76, 4),          // G
+  N(81, 2, 84, 2, 88, 4, 86, 2, 84, 2, 81, 4),          // Am: the lift
+  N(77, 2, 81, 2, 84, 4, 81, 2, 79, 2, 76, 2, 74, 2),   // F: tumbling back down
+  N(79, 4, 76, 2, 72, 2, 76, 2, 79, 2, 84, 4),          // C
+  N(83, 2, 86, 2, 79, 4, 83, 2, 81, 2, 79, 4),          // G
+  N(81, 2, 84, 2, 89, 4, 88, 2, 86, 2, 84, 4),          // F: the high point
+  N(86, 2, 83, 2, 79, 4, 77, 2, 76, 2, 74, 4),          // G: lands you back at the top
+];
+const TUNE = { lead: BARS.flatMap((b) => b.notes), len: BARS.flatMap((b) => b.lens), length: 128, chords: [[60, 4], [55, 4], [57, 3], [53, 4], [60, 4], [55, 4], [53, 4], [55, 4]] };
 export const audio = new Sfx();

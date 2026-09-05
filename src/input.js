@@ -28,11 +28,14 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       const a = KEYMAP[e.code]; if (a) { this.keys[a] = true; if (this.usingGamepad && this.onDeviceChange) this.onDeviceChange(false); this.usingGamepad = false; }
+      if (!e.shiftKey) this.keys.sprint = false;
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
       this.anyInput = true;
     });
-    window.addEventListener('keyup', (e) => { const a = KEYMAP[e.code]; if (a) this.keys[a] = false; });
+    window.addEventListener('keyup', (e) => { const a = KEYMAP[e.code]; if (a) this.keys[a] = false; if (!e.shiftKey) this.keys.sprint = false; });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { this.keys = {}; this.mouseBtns = {}; } });
     window.addEventListener('blur', () => { this.keys = {}; this.mouseBtns = {}; });
+    this.padState = {}; this.padPrev = {};
     document.addEventListener('mousemove', (e) => {
       if (!this.pointerLocked) return;
       let dx = e.movementX, dy = e.movementY;
@@ -88,7 +91,7 @@ export class Input {
     // look from mouse
     let lx = -this.mx * this.mouseSens, ly = -this.my * this.mouseSens; this.mx = 0; this.my = 0;
 
-    const pad = this._getPad();
+    const pad = this._getPad(); const padS = {};
     if (pad) {
       const dz = (v) => (Math.abs(v) < 0.14 ? 0 : (v - Math.sign(v) * 0.14) / 0.86);
       const ax = dz(pad.axes[0] || 0), ay = dz(pad.axes[1] || 0), rx = dz(pad.axes[2] || 0), ry = dz(pad.axes[3] || 0);
@@ -106,11 +109,12 @@ export class Input {
       for (const idx in PADMAP) {
         const b = pad.buttons[idx]; if (!b) continue;
         const pressed = b.pressed || b.value > 0.35;
-        if (pressed) { s[PADMAP[idx]] = true; padActive = true; }
+        if (pressed) { s[PADMAP[idx]] = true; padS[PADMAP[idx]] = true; padActive = true; }
       }
       if (padActive) { if (!this.usingGamepad && this.onDeviceChange) this.onDeviceChange(true); this.usingGamepad = true; this.anyInput = true; }
       this._pad = pad;
     } else this._pad = null;
+    this.padPrev = this.padState; this.padState = padS;
 
     const ml = Math.hypot(mx, my); if (ml > 1) { mx /= ml; my /= ml; }
     this.move.x = mx; this.move.y = my;
@@ -118,7 +122,7 @@ export class Input {
   }
 
   down(a) { return !!this.state[a]; }
-  pressed(a) { return !!this.state[a] && !this.prev[a]; }
+  pressed(a) { return (!!this.state[a] && !this.prev[a]) || (!!this.padState[a] && !this.padPrev[a]); }
   released(a) { return !this.state[a] && !!this.prev[a]; }
   consume(a) { this.state[a] = false; }
   anyPressed() { for (const k in this.state) if (this.state[k] && !this.prev[k]) return true; return false; }

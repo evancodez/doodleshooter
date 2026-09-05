@@ -5,7 +5,7 @@ rooftops and canyons, slice bullets back at the doodles that fired them, lob gre
 many waves you can survive. Play alone, survive with friends, or fight them.
 
 Everything you see is generated in code with three.js. There are no models, textures or sound
-files: the paper, the ink outlines, the hatching, the enemies and the music are all procedural.
+files: the paper, the ink outlines, the hatching, the enemies and the music are all procedural, including the 8-bit theme (toggle it in settings or with M).
 
 ## Running it
 
@@ -60,7 +60,7 @@ slashes and turns some bullets aside, and the guns use their own damage table; t
 ## Map
 
 Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots. Solo
-plays the tight original block. A match opens it up: a wide ring of empty street, tall walls, a
+plays the tight original block. A match opens it up: a ring of empty street, walls, a
 ribbed dome that cannot be hooked, an open field in the middle crossed by a ruler bridge, a few
 pads hung from the dome, and slow paper planes you can hook and ride (the solo planes too). Everyone starts in a
 different spot.
