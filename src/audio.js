@@ -158,7 +158,7 @@ class Sfx {
   // ---------- music: an 8-bit theme, two pulse voices, a triangle bass, an arpeggio and drums ----------
   musicOn(on) {
     if (!this.ctx) return;
-    if (on && !this._mus) { this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.13; this.musicGain.connect(this.master); this._mus = { step: 0, next: this.ctx.currentTime + 0.1, timer: setInterval(() => this._musicTick(), 100) }; }
+    if (on && !this._mus) { this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.05; this.musicGain.connect(this.master); this._mus = { step: 0, next: this.ctx.currentTime + 0.1, timer: setInterval(() => this._musicTick(), 100) }; }
     else if (!on && this._mus) { clearInterval(this._mus.timer); this._mus = null; if (this.musicGain) this.musicGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2); }
   }
   get musicPlaying() { return !!this._mus; }
@@ -169,19 +169,41 @@ class Sfx {
     // a throttled tab can fall far behind; skip forward rather than replaying every missed note
     if (m.next < ctx.currentTime - 0.8) m.next = ctx.currentTime + 0.05;
     while (m.next < ctx.currentTime + 0.7) {
-      const t = m.next, i = m.step % TUNE.length, bar = Math.floor(i / 16) % 8, s16 = i % 16;
-      const chord = TUNE.chords[bar]; const root = chord[0];
-      // lead: pulse, with a soft octave shadow on the second half of the loop for lift
-      const n = TUNE.lead[i];
-      if (n > 0) { const len = TUNE.len[i] * step; this.tone({ freq: midi(n), dur: len * 0.92, gain: 0.11, type: 'square', at: t, out }); if (m.step % (TUNE.length * 2) >= TUNE.length) this.tone({ freq: midi(n + 12), dur: len * 0.6, gain: 0.03, type: 'square', at: t, out }); }
-      // bass: root with octave and fifth bounces on eighth notes
-      if (s16 % 2 === 0) { const b = [0, 0, 12, 0, 0, 7, 0, 12][s16 / 2]; this.tone({ freq: midi(root - 12 + b), dur: step * 1.6, gain: 0.16, type: 'triangle', at: t, out }); }
+      const t = m.next, i = m.step % SONG.length, bar = Math.floor(i / 16), s16 = i % 16;
+      const sec = SONG.section[bar], chord = SONG.chord[bar], root = chord[0];
+      const firstBar = SONG.firstBar[bar], lastBar = SONG.lastBar[bar];
+      // lead: a pulse with a slightly detuned twin for width, an optional octave shadow, and a dotted-eighth echo in the airy sections
+      const n = SONG.lead[i];
+      if (n > 0) {
+        const dur = SONG.len[i] * step * 0.9, f = midi(n);
+        this.tone({ freq: f, dur, gain: 0.1, type: 'square', at: t, out });
+        this.tone({ freq: f * 1.004, dur, gain: 0.04, type: 'square', at: t, out });
+        if (sec.shadow) this.tone({ freq: f * 2, dur: dur * 0.7, gain: sec.shadow, type: 'square', at: t, out });
+        if (sec.echo) { this.tone({ freq: f, dur: dur * 0.8, gain: 0.035, type: 'square', at: t + step * 3, out }); this.tone({ freq: f, dur: dur * 0.6, gain: 0.012, type: 'square', at: t + step * 6, out }); }
+      }
+      // bass: each section has its own feel; 'drive' and 'pump' walk toward the next chord on the last eighth
+      const b = root - 12; let nb = SONG.chord[(bar + 1) % SONG.bars][0] - 12; if (nb - b > 6) nb -= 12; else if (b - nb > 6) nb += 12;
+      const approach = nb === b ? b + 7 : nb + (nb > b ? -1 : 1);
+      const bass = (note, len, gain = 0.16) => this.tone({ freq: midi(note), dur: step * len, gain, type: 'triangle', at: t, out });
+      if (sec.bass === 'bounce') { if (s16 % 2 === 0) bass(b + [0, 0, 12, 0, 0, 7, 0, 12][s16 / 2], 1.6); }
+      else if (sec.bass === 'drive') { if (s16 % 2 === 0) bass(s16 === 14 ? approach : s16 === 6 ? b + 12 : s16 === 12 ? b + 7 : b, 1.4, 0.17); }
+      else if (sec.bass === 'sparse') { if (s16 === 0) bass(b, 6, 0.14); else if (s16 === 8) bass(b + 7, 4, 0.12); }
+      else if (sec.bass === 'pump') { if (s16 === 0 || s16 === 8) bass(b, 2.5); else if (s16 === 4) bass(b + 7, 2.5); else if (s16 === 12) bass(b + 12, 1.6); else if (s16 === 14) bass(approach, 1.4); }
       // arpeggio: chord tones on every sixteenth, quiet
-      { const tones = [root, root + chord[1], root + 7, root + 12]; this.tone({ freq: midi(tones[s16 % 4] + 12), dur: step * 0.8, gain: 0.03 + I * 0.02, type: 'square', at: t, out }); }
-      // drums: kick, snare, hats; more hats and a ghost kick when things heat up
-      if (s16 === 0 || s16 === 8 || (I > 0.5 && s16 === 10) || (s16 === 14 && bar % 4 === 3)) this.tone({ freq: 160, freqEnd: 45, dur: 0.12, gain: 0.8, type: 'sine', at: t, out });
-      if (s16 === 4 || s16 === 12) this._noiseAt(t, 0.11, 0.42, 'bandpass', 2200, out);
-      if (s16 % 2 === 0 || I > 0.4) this._noiseAt(t, s16 % 4 === 2 ? 0.05 : 0.025, s16 % 4 === 2 ? 0.2 : 0.12, 'highpass', 8000, out);
+      if (sec.arp) { const tones = [root, root + chord[1], root + 7, root + 12]; this.tone({ freq: midi(tones[s16 % 4] + 12), dur: step * 0.8, gain: 0.03 + I * 0.02, type: 'square', at: t, out }); }
+      // counter voice: a soft triangle answering on the off-beats
+      if (sec.counter && s16 % 4 === 2) { const tones = [root + 12, root + chord[1] + 12, root + 19, root + chord[1] + 12]; this.tone({ freq: midi(tones[(s16 - 2) / 4]), dur: step * 1.5, gain: 0.06, type: 'triangle', at: t, out }); }
+      // drums: a splash on each new section, a rising snare fill into the next one, otherwise the section's own groove
+      const D = sec.drums;
+      if (firstBar && s16 === 0) this._noiseAt(t, 0.4, 0.14, 'highpass', 5000, out);
+      if (lastBar && s16 >= 12) this._noiseAt(t, 0.08, 0.12 + (s16 - 12) * 0.05, 'bandpass', 1800 + (s16 - 12) * 350, out);
+      else {
+        const kick = D === 'driving' ? s16 % 4 === 0 : D === 'sparse' ? s16 === 0 : (s16 === 0 || s16 === 8 || (I > 0.5 && s16 === 10) || (s16 === 14 && D === 'full' && bar % 2 === 1));
+        if (kick) this.tone({ freq: 160, freqEnd: 45, dur: 0.12, gain: D === 'sparse' ? 0.3 : 0.45, type: 'sine', at: t, out });
+        if (D !== 'sparse' && (s16 === 4 || s16 === 12)) this._noiseAt(t, 0.11, D === 'light' ? 0.14 : 0.22, 'bandpass', 2200, out);
+        const hat = D === 'driving' ? true : D === 'full' ? (s16 % 2 === 0 || I > 0.4) : D === 'light' ? s16 % 4 === 2 : s16 === 8;
+        if (hat) { const open = s16 % 4 === 2; this._noiseAt(t, open ? 0.05 : 0.025, (open ? 0.1 : 0.06) * (s16 % 2 ? 0.5 : 1) * (D === 'sparse' ? 0.6 : 1), 'highpass', 8000, out); }
+      }
       m.next += step; m.step++;
     }
   }
@@ -193,17 +215,62 @@ class Sfx {
   }
 }
 
-// ---------- the theme: eight bars, sixteenth grid ----------
+// ---------- the theme: seven eight-bar sections (~86s) on a sixteenth grid; 0 is a rest ----------
 const N = (...pairs) => { const notes = [], lens = []; for (let k = 0; k < pairs.length; k += 2) { notes.push(pairs[k]); lens.push(pairs[k + 1]); for (let j = 1; j < pairs[k + 1]; j++) { notes.push(0); lens.push(0); } } return { notes, lens }; };
-const BARS = [
-  N(76, 2, 79, 2, 84, 4, 83, 2, 84, 2, 79, 4),          // C: bright leap up
-  N(74, 2, 76, 2, 79, 4, 81, 2, 79, 2, 76, 4),          // G
-  N(81, 2, 84, 2, 88, 4, 86, 2, 84, 2, 81, 4),          // Am: the lift
-  N(77, 2, 81, 2, 84, 4, 81, 2, 79, 2, 76, 2, 74, 2),   // F: tumbling back down
-  N(79, 4, 76, 2, 72, 2, 76, 2, 79, 2, 84, 4),          // C
-  N(83, 2, 86, 2, 79, 4, 83, 2, 81, 2, 79, 4),          // G
-  N(81, 2, 84, 2, 89, 4, 88, 2, 86, 2, 84, 4),          // F: the high point
-  N(86, 2, 83, 2, 79, 4, 77, 2, 76, 2, 74, 4),          // G: lands you back at the top
+const C = [60, 4], G = [55, 4], Am = [57, 3], F = [53, 4], Em = [52, 3]; // [root, third] for the arpeggio and counter voice
+const HOOK = [
+  N(76, 2, 79, 2, 84, 3, 0, 1, 79, 2, 76, 2, 0, 4),           // C: the leap, then a breath
+  N(74, 3, 79, 3, 83, 2, 81, 2, 79, 4, 0, 2),                 // G: swung answer
+  N(81, 2, 84, 2, 88, 4, 86, 2, 84, 2, 81, 4),                // Am: the lift
+  N(77, 2, 81, 2, 84, 2, 81, 2, 79, 2, 77, 2, 76, 2, 74, 2),  // F: tumbling back down
 ];
-const TUNE = { lead: BARS.flatMap((b) => b.notes), len: BARS.flatMap((b) => b.lens), length: 128, chords: [[60, 4], [55, 4], [57, 3], [53, 4], [60, 4], [55, 4], [53, 4], [55, 4]] };
+const TAIL_A = [
+  N(72, 2, 76, 2, 79, 4, 0, 2, 84, 4, 0, 2),                  // C
+  N(83, 2, 81, 2, 79, 2, 74, 4, 0, 2, 79, 2, 81, 2),          // G
+  N(81, 3, 77, 3, 84, 3, 81, 3, 79, 4),                       // F: three-against-four
+  N(79, 4, 77, 2, 76, 2, 74, 4, 0, 4),                        // G: walks back to the top
+];
+const TAIL_B = [
+  N(76, 2, 79, 2, 84, 2, 88, 6, 0, 4),                        // C: reaches higher
+  N(86, 2, 83, 2, 79, 4, 0, 2, 81, 2, 83, 4),                 // G
+  N(84, 2, 81, 2, 77, 4, 81, 2, 84, 2, 86, 4),                // F
+  N(83, 3, 0, 1, 79, 3, 0, 1, 74, 4, 0, 4),                   // G: stabs, then hands off
+];
+const BRIDGE = [
+  N(69, 2, 69, 2, 72, 2, 76, 4, 0, 2, 69, 4),                 // Am: low and punchy
+  N(65, 2, 65, 2, 69, 2, 72, 4, 0, 2, 74, 2, 72, 2),          // F
+  N(76, 2, 76, 2, 74, 2, 72, 4, 0, 2, 67, 4),                 // C
+  N(71, 2, 74, 2, 79, 4, 0, 2, 77, 2, 76, 2, 74, 2),          // G
+  N(69, 2, 69, 2, 72, 2, 76, 4, 0, 2, 81, 4),                 // Am: same call, higher answer
+  N(77, 3, 0, 1, 77, 2, 81, 2, 84, 8),                        // F: opens up
+  N(83, 2, 81, 2, 79, 4, 74, 4, 79, 4),                       // G
+  N(83, 2, 86, 6, 0, 8),                                      // G: one long note, then silence into the breakdown
+];
+const BREAK = [
+  N(81, 8, 84, 8), N(83, 8, 86, 8), N(79, 8, 76, 8), N(81, 12, 0, 4),   // F G Em Am: long floating notes
+  N(77, 4, 81, 4, 84, 8), N(79, 4, 83, 4, 86, 8), N(88, 8, 86, 4, 84, 4), N(79, 4, 0, 12), // F G C C: climbs, then drops out for the fill
+];
+const CHORUS = [
+  N(84, 3, 86, 1, 88, 4, 0, 2, 79, 6),                        // C: bright, dotted
+  N(83, 3, 79, 1, 76, 4, 0, 2, 83, 6),                        // Em
+  N(81, 3, 84, 1, 81, 4, 0, 2, 77, 6),                        // F
+  N(79, 2, 81, 2, 83, 4, 86, 4, 0, 4),                        // G: climbs
+  N(84, 3, 86, 1, 88, 4, 0, 2, 86, 3, 84, 3),                 // C
+  N(83, 3, 79, 1, 76, 4, 0, 2, 83, 3, 84, 3),                 // Em
+  N(81, 2, 84, 2, 81, 2, 77, 4, 0, 2, 81, 4),                 // F
+  N(79, 4, 83, 2, 86, 2, 79, 4, 0, 4),                        // G: back to the hook
+];
+const PROG_A = [C, G, Am, F, C, G, F, G], PROG_B = [Am, F, C, G, Am, F, G, G], PROG_C = [F, G, Em, Am, F, G, C, C], PROG_D = [C, Em, F, G, C, Em, F, G];
+const SECTIONS = [
+  { bars: [...HOOK, ...TAIL_A], chords: PROG_A, bass: 'bounce', drums: 'full', arp: true },
+  { bars: [...HOOK, ...TAIL_B], chords: PROG_A, bass: 'bounce', drums: 'full', arp: true, shadow: 0.02 },
+  { bars: BRIDGE, chords: PROG_B, bass: 'drive', drums: 'driving' },
+  { bars: BREAK, chords: PROG_C, bass: 'sparse', drums: 'sparse', echo: true },
+  { bars: CHORUS, chords: PROG_D, bass: 'pump', drums: 'full', counter: true, shadow: 0.02 },
+  { bars: [...HOOK, ...TAIL_A], chords: PROG_A, bass: 'bounce', drums: 'full', arp: true, shadow: 0.045 },
+  { bars: CHORUS, chords: PROG_D, bass: 'pump', drums: 'driving', arp: true, counter: true, shadow: 0.03 },
+];
+const SONG = { lead: [], len: [], chord: [], section: [], firstBar: [], lastBar: [] };
+for (const s of SECTIONS) s.bars.forEach((b, k) => { SONG.lead.push(...b.notes); SONG.len.push(...b.lens); SONG.chord.push(s.chords[k]); SONG.section.push(s); SONG.firstBar.push(k === 0); SONG.lastBar.push(k === s.bars.length - 1); });
+SONG.bars = SONG.chord.length; SONG.length = SONG.bars * 16;
 export const audio = new Sfx();

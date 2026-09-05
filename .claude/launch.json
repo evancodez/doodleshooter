@@ -1,6 +1,12 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "doodle-game", "url": "http://127.0.0.1:8765", "port": 8765 }
+    {
+      "name": "doodle-game",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["serve.py", "8910"],
+      "port": 8910,
+      "url": "http://127.0.0.1:8910"
+    }
   ]
 }
