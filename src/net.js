@@ -7,7 +7,9 @@
 // every slot at once - a directory with no directory server. A connection only counts once the
 // host has answered with a welcome, so a full or closed lobby can be skipped for the next one.
 
-const PREFIX = 'doodledistrict-';
+// a local dev server gets its own namespace so testing can never wander into a live lobby
+const LOCAL = typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const PREFIX = LOCAL ? 'doodledev-' : 'doodledistrict-';
 const PUBLIC_SLOTS = 8;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const makeCode = () => Array.from({ length: 5 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');

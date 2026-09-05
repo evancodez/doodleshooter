@@ -8,9 +8,9 @@ import { rand, choose, TAU } from './util.js';
 export const LEVELS = [{ key: 'district', name: 'DOODLE DISTRICT', blurb: 'streets, rooftops and fire escapes' }];
 
 function createBuilder(scene, world) {
-  const geos = {}; const L = { rings: [], spawns: [], snipers: [], pickups: [], animated: [], meshes: [], playerStart: new THREE.Vector3(0, 0, 42), bounds: { minX: -72, maxX: 72, minZ: -72, maxZ: 72 } };
+  const geos = {}; const L = { rings: [], spawns: [], snipers: [], pickups: [], animated: [], meshes: [], playerStart: new THREE.Vector3(0, 0, 42), bounds: { minX: -55, maxX: 55, minZ: -55, maxZ: 55 }, arenaSpawns: [] };
   const addGeo = (g, ink) => (geos[ink] || (geos[ink] = [])).push(g);
-  const collider = (x, y, z, w, h, d, o = {}) => world.addBox({ x: x - w / 2, y, z: z - d / 2 }, { x: x + w / 2, y: y + h, z: z + d / 2 }, { noNav: !!o.noNav, noShoot: !!o.noShoot, tag: o.tag });
+  const collider = (x, y, z, w, h, d, o = {}) => world.addBox({ x: x - w / 2, y, z: z - d / 2 }, { x: x + w / 2, y: y + h, z: z + d / 2 }, { noNav: !!o.noNav, noShoot: !!o.noShoot, noGrapple: !!o.noGrapple, tag: o.tag });
   function box(x, y, z, w, h, d, o = {}) {
     const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y + h / 2, z); addGeo(g, o.ink ?? INK.BLUE);
     if (!o.noCollide) collider(x, y, z, w, h, d, o);
@@ -95,42 +95,54 @@ function createBuilder(scene, world) {
 }
 
 // ============================ map 1: Doodle District ============================
-function buildDistrict(B) {
+function buildDistrict(B, arena = false) {
   const { L, box, slab, wallX, wallZ, stairs, rail, cyl, sphere, ring, spawn, sniper, pickup, planes, addGeo, collider } = B;
   // ---------------- ground + perimeter ----------------
-  box(0, -1, 0, 150, 1, 150);
-  const P = 72, T = 6, PH = 34;
+  // solo keeps the tight old block; a match gets a far wider arena, a dome and a hanging playground
+  const P = arena ? 90 : 55, T = 6, PH = arena ? 60 : 18, E = P - 3.8, D = P - 3;
+  L.bounds.minX = -P; L.bounds.maxX = P; L.bounds.minZ = -P; L.bounds.maxZ = P;
+  box(0, -1, 0, 2 * P + T, 1, 2 * P + T);
   box(0, 0, -P, 2 * P + T, PH, T); box(0, 0, P, 2 * P + T, PH, T); box(-P, 0, 0, T, PH, 2 * P + T); box(P, 0, 0, T, PH, 2 * P + T);
   // ledges / balconies on the perimeter (grapple + stand)
-  for (const [x, z, w, d] of [[-30, -68.2, 8, 1.6], [30, -68.2, 8, 1.6], [-68.2, 40, 1.6, 8], [68.2, -10, 1.6, 8], [-68.2, -30, 1.6, 6], [68.2, 35, 1.6, 6], [10, 68.2, 8, 1.6], [-40, 68.2, 6, 1.6], [0, -68.2, 10, 1.8], [-68.2, 0, 1.8, 10], [68.2, 0, 1.8, 10], [0, 68.2, 10, 1.8]]) {
-    box(x, 9, z, w, 0.4, d); box(x, 5.5, z, w, 0.4, d); box(x, 16, z, w, 0.4, d); ring(x, 20, z, 'y');
+  const ledges = [[-30, -E, 8, 1.6], [30, -E, 8, 1.6], [-E, 40, 1.6, 8], [E, -10, 1.6, 8], [-E, -30, 1.6, 6], [E, 35, 1.6, 6], [10, E, 8, 1.6], [-40, E, 6, 1.6]];
+  if (arena) ledges.push([0, -E, 10, 1.8], [-E, 0, 1.8, 10], [E, 0, 1.8, 10], [0, E, 10, 1.8], [60, -E, 8, 1.6], [-60, E, 8, 1.6], [-E, -60, 1.6, 8], [E, 60, 1.6, 8]);
+  for (const [x, z, w, d] of ledges) {
+    box(x, 9, z, w, 0.4, d); box(x, 5.5, z, w, 0.4, d);
+    if (arena) { box(x, 16, z, w, 0.4, d); box(x, 30, z, w, 0.4, d); ring(x, 20, z, 'y'); ring(x, 34, z, 'y'); }
   }
   // spawn doorways in the perimeter (visual frames)
   const doorFrame = (x, z, alongX) => { if (alongX) { box(x - 1.2, 0, z, 0.3, 3.2, 0.5, { noCollide: true, ink: INK.BLACK }); box(x + 1.2, 0, z, 0.3, 3.2, 0.5, { noCollide: true, ink: INK.BLACK }); box(x, 3.0, z, 2.7, 0.3, 0.5, { noCollide: true, ink: INK.BLACK }); } else { box(x, 0, z - 1.2, 0.5, 3.2, 0.3, { noCollide: true, ink: INK.BLACK }); box(x, 0, z + 1.2, 0.5, 3.2, 0.3, { noCollide: true, ink: INK.BLACK }); box(x, 3.0, z, 0.5, 0.3, 2.7, { noCollide: true, ink: INK.BLACK }); } };
-  for (const [x, z] of [[-69, 0], [69, 0], [-69, 30], [69, -30], [-69, -30], [69, 30]]) { doorFrame(x, z, false); spawn(x + (x < 0 ? 1.2 : -1.2), 0, z); }
-  for (const [x, z] of [[0, -69], [0, 69], [-30, 69], [30, 69]]) { doorFrame(x, z, true); spawn(x, 0, z + (z < 0 ? 1.2 : -1.2)); }
-  // the outer ring: empty streets between the old blocks and the new walls, with a little clutter
-  for (const [x, z, w, h, d] of [[-60, -20, 2.2, 2.2, 2.2], [-60, -17.6, 2.2, 2.2, 2.2], [-60, -18.8, 2.2, 2.2, 2.2], [62, 18, 2.4, 1.2, 2.4], [58, -40, 6, 0.5, 1.2], [-58, 45, 6, 0.5, 1.2], [20, 60, 1.2, 0.5, 6], [-22, -60, 1.2, 0.5, 6], [40, -62, 3, 3, 3], [-40, 62, 3, 3, 3]]) box(x, 0, z, w, h, d);
-  for (const [x, z] of [[-60, 20], [60, -20], [20, -60], [-20, 60]]) { box(x, 0, z, 0.3, 7, 0.3, { noNav: true }); box(x, 7, z, 1.4, 0.3, 0.3, { noCollide: true }); addGeo(new THREE.SphereGeometry(0.45, 8, 6).translate(x + 0.7, 6.8, z), INK.ORANGE); }
-  // a really tall dome over everything: ink ribs on the outside, an invisible lid on the inside
-  { const R = 104; const rib = (g) => addGeo(g, INK.BLUE);
-    for (let k = 0; k < 6; k++) { const g = new THREE.TorusGeometry(R, 0.55, 5, 72, Math.PI); g.rotateY(k * Math.PI / 6); rib(g); }
-    for (const h of [36, 58, 76, 90, 99]) { const r = Math.sqrt(R * R - h * h); const g = new THREE.TorusGeometry(r, 0.45, 5, 96); g.rotateX(Math.PI / 2); g.translate(0, h, 0); rib(g); }
-    addGeo(new THREE.SphereGeometry(2.2, 10, 8).translate(0, R, 0), INK.RED);
-    collider(0, 95, 0, 240, 8, 240, { noNav: true });
-    for (const [y0, inner] of [[70, 72], [75, 66], [80, 60], [85, 52], [90, 42]]) { const o = inner + 60; collider(0, y0, -o, 240, 5, 120, { noNav: true }); collider(0, y0, o, 240, 5, 120, { noNav: true }); collider(-o, y0, 0, 120, 5, 240, { noNav: true }); collider(o, y0, 0, 120, 5, 240, { noNav: true }); }
-    // monkey bars hung from the dome: a cross-hatched grid to grapple, swing and stand on
-    const Y = 56;
-    for (let i = -16; i <= 16; i += 4) { box(0, Y, i, 34, 0.32, 0.32, { noNav: true, ink: INK.BLACK }); box(i, Y + 0.34, 0, 0.32, 0.32, 34, { noNav: true, ink: INK.BLACK }); }
-    for (const [x, z] of [[-17, -17], [17, -17], [-17, 17], [17, 17]]) { const top = Math.sqrt(R * R - x * x - z * z); box(x, Y + 0.6, z, 0.25, top - Y - 0.6, 0.25, { noCollide: true, ink: INK.BLACK }); }
-    for (const [x, z] of [[-12, -12], [12, -12], [-12, 12], [12, 12], [0, 0]]) ring(x, Y - 1.4, z, 'y');
-    // four trapezes lower down so there is a way up and across
-    for (const [x, z] of [[-34, -34], [34, -34], [-34, 34], [34, 34]]) { const top = Math.sqrt(R * R - x * x - z * z); box(x, 42, z, 5, 0.3, 0.3, { noNav: true, ink: INK.BLACK }); box(x - 2.3, 42.3, z, 0.2, top - 42.3, 0.2, { noCollide: true, ink: INK.BLACK }); box(x + 2.3, 42.3, z, 0.2, top - 42.3, 0.2, { noCollide: true, ink: INK.BLACK }); ring(x, 40.6, z, 'y'); }
-    for (const [x, z] of [[0, -44], [0, 44], [-44, 0], [44, 0]]) { const top = Math.sqrt(R * R - x * x - z * z); box(x, 30, z, 4, 0.3, 0.3, { noNav: true, ink: INK.BLACK }); box(x, 30.3, z, 0.2, top - 30.3, 0.2, { noCollide: true, ink: INK.BLACK }); ring(x, 28.6, z, 'y'); }
+  for (const [x, z] of [[-D, 0], [D, 0], [-D, 30], [D, -30], [-D, -30], [D, 30]]) { doorFrame(x, z, false); spawn(x + (x < 0 ? 1.2 : -1.2), 0, z); }
+  for (const [x, z] of [[0, -D], [0, D], [-30, D], [30, D]]) { doorFrame(x, z, true); spawn(x, 0, z + (z < 0 ? 1.2 : -1.2)); }
+  if (arena) {
+    // where a match drops people in: rooftops, the highway, the field edges and the outer ring
+    for (const [x, y, z] of [[-34, 12.2, 12], [34, 12.2, 12], [-30, 7.2, -45], [16, 7.2, -45], [0, 7.4, -30], [-44, 0, -10], [44, 0, -10], [-40, 0, 40], [40, 0, 40], [0, 0, 55], [-62, 0, 0], [62, 0, 0], [0, 0, -64], [-60, 0, 60], [60, 0, -60]]) L.arenaSpawns.push(new THREE.Vector3(x, y, z));
+    // a few low things on the field, nothing to hide a whole person
+    box(-8, 0, 20, 3, 1, 1.2); box(10, 0, 26, 1.4, 1.2, 1.4); box(-12, 0, -8, 2.4, 0.8, 2.4); box(14, 0, -4, 2.4, 0.8, 2.4);
+    for (const [x, z] of [[-70, 30], [70, -30], [30, -70], [-30, 70]]) { box(x, 0, z, 0.3, 7, 0.3, { noNav: true }); box(x, 7, z, 1.4, 0.3, 0.3, { noCollide: true }); addGeo(new THREE.SphereGeometry(0.45, 8, 6).translate(x + 0.7, 6.8, z), INK.ORANGE); }
+    // the dome: ribs to look at, plus an invisible shell of bands that stops you and shrugs off the hook
+    const R = 140, C = -30; const domeY = (x, z) => Math.sqrt(Math.max(1, R * R - x * x - z * z)) + C;
+    for (let k = 0; k < 8; k++) { const g = new THREE.TorusGeometry(R, 0.6, 5, 96, Math.PI); g.rotateY(k * Math.PI / 8); g.translate(0, C, 0); addGeo(g, INK.BLUE); }
+    for (const h of [45, 65, 82, 96, 106]) { const r = Math.sqrt(R * R - (h - C) * (h - C)); const g = new THREE.TorusGeometry(r, 0.5, 5, 128); g.rotateX(Math.PI / 2); g.translate(0, h, 0); addGeo(g, INK.BLUE); }
+    addGeo(new THREE.SphereGeometry(2.4, 10, 8).translate(0, R + C, 0), INK.RED);
+    const NG = { noNav: true, noGrapple: true };
+    collider(0, 104, 0, 300, 10, 300, NG);
+    for (let y0 = 60; y0 < 104; y0 += 4) { const inner = Math.sqrt(Math.max(0, R * R - (y0 + 4 - C) ** 2)); if (inner > P + T) continue; const o = inner + 80; collider(0, y0, -o, 320, 4, 160, NG); collider(0, y0, o, 320, 4, 160, NG); collider(-o, y0, 0, 160, 4, 320, NG); collider(o, y0, 0, 160, 4, 320, NG); }
+    // the middle of the sky: pads you can land on and rows of rungs to swing between, hung from the dome
+    const cable = (x, y, z) => box(x, y, z, 0.12, Math.max(1, domeY(x, z) - y), 0.12, { noCollide: true, ink: INK.BLACK });
+    const pad = (x, y, z, w, d) => { box(x, y, z, w, 0.5, d, { noNav: true }); cable(x, y + 0.5, z); ring(x, y - 1.3, z, 'y'); };
+    for (const [x, y, z, w, d] of [[0, 22, 0, 9, 9], [-18, 14, -14, 6, 6], [18, 14, -14, 6, 6], [-18, 14, 14, 6, 6], [18, 14, 14, 6, 6], [0, 31, -20, 5, 5], [0, 31, 20, 5, 5], [-27, 25, 0, 5, 5], [27, 25, 0, 5, 5], [0, 42, 0, 4, 4]]) pad(x, y, z, w, d);
+    const rungRow = (x1, z1, x2, z2, y) => {
+      const n = Math.round(Math.hypot(x2 - x1, z2 - z1) / 1.5); const ax = Math.abs(x2 - x1) > Math.abs(z2 - z1);
+      for (let i = 1; i < n; i++) { const t = i / n, x = x1 + (x2 - x1) * t, z = z1 + (z2 - z1) * t; box(x, y, z, ax ? 0.25 : 2.4, 0.25, ax ? 2.4 : 0.25, { noNav: true, ink: INK.BLACK }); if (i % 8 === 4) cable(x, y + 0.25, z); }
+      const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2; box(cx, y + 0.3, cz, ax ? Math.abs(x2 - x1) : 0.15, 0.15, ax ? 0.15 : Math.abs(z2 - z1), { noCollide: true, ink: INK.BLACK }); ring(cx, y - 1.2, cz, 'y');
+    };
+    rungRow(-15, -14, 15, -14, 16.2); rungRow(-15, 14, 15, 14, 16.2); rungRow(-18, -11, -18, 11, 16.2); rungRow(18, -11, 18, 11, 16.2);
+    rungRow(-24.5, 0, -4.5, 0, 26); rungRow(4.5, 0, 24.5, 0, 26); rungRow(0, -17.5, 0, -4.5, 32.5); rungRow(0, 4.5, 0, 17.5, 32.5);
   }
 
-  // ---------------- central tower ----------------
-  {
+  // ---------------- central tower (solo only: a match wants the field open) ----------------
+  if (!arena) {
     const W = 14, H = 4, hw = W / 2;
     for (let f = 1; f <= 4; f++) slab(-hw, -hw, hw, hw, f * H, 0.4);
     for (const [px, pz] of [[-6.6, -6.6], [6.6, -6.6], [-6.6, 6.6], [6.6, 6.6], [0, -6.6], [0, 6.6], [-6.6, 0], [6.6, 0]]) box(px, 0, pz, 0.8, 16, 0.8);
@@ -254,8 +266,8 @@ function buildDistrict(B) {
     spawn(-8, 11, z); spawn(-30, 7, z - 3); spawn(16, 7, z); sniper(-8, 11, z - 3); sniper(16, 7, z + 2); pickup(-8, 11, z + 2); pickup(-30, 7, z);
   }
 
-  // ---------------- south plaza: containers, crates, bus, doodle props ----------------
-  {
+  // ---------------- south plaza: containers, crates, bus, doodle props (solo only) ----------------
+  if (!arena) {
     box(-14, 0, 34, 2.5, 2.6, 6.2, { ink: INK.GREEN }); box(-14, 2.6, 34, 2.5, 2.6, 6.2, { ink: INK.ORANGE });
     box(14, 0, 36, 6.2, 2.6, 2.5); box(17, 2.6, 36, 3, 2.6, 2.5, { ink: INK.GREEN });
     box(-6, 0, 28, 1.4, 1.4, 1.4); box(-4.5, 0, 28.5, 1.2, 1.2, 1.2); box(-5.3, 1.4, 28.2, 1.0, 1.0, 1.0);
@@ -302,7 +314,7 @@ function buildDistrict(B) {
 // A gorge cut into the notebook. An ink river runs along the bottom, terraced cliffs step up on
 // both sides (each ledge reachable by cut-in stairs, so enemies climb too), rock spires and a
 // rope bridge give the grapple something to bite, and the top ledges are exposed sniper ground.
-export function buildLevel(scene, world, key = 'district') {
+export function buildLevel(scene, world, key = 'district', opts = {}) {
   const B = createBuilder(scene, world);
-  return buildDistrict(B);
+  return buildDistrict(B, !!opts.arena);
 }

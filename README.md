@@ -42,7 +42,7 @@ join a match already in progress. The host's browser keeps score; each player ru
 | Reload | R | □ |
 | Grenade (hold to throw further) | G | R3 or d-pad up |
 | Katana dash (gauge lit) | both mouse buttons or X | L2 + R2 |
-| Weapons | 1-5 / wheel | △, d-pad |
+| Weapons | 1-4 / wheel | △, d-pad |
 | Scoreboard (online) | Tab | Create |
 | Menu | Esc | Options |
 
@@ -50,18 +50,18 @@ On-screen hints follow whichever device you touched last.
 
 ## Weapons and gear
 
-Rifle, shotgun, revolver, sniper (with scope) and a katana. Holding block with the katana parries
+Rifle, shotgun, sniper (with scope) and a katana. Holding block with the katana parries
 some incoming bullets and returns a share of them. Katana kills charge a gauge; when it is lit you
 can dash to a marked enemy and execute it (solo only). Grenades bounce, then go off in a thick orange blast that scorches the paper; holding the
 button winds up a longer throw and shows the arc. Against other players a raised katana parries
-slashes and turns some bullets aside, and the guns use their own damage table so the revolver
-only erases in one headshot up close.
+slashes and turns some bullets aside, and the guns use their own damage table; the sniper still erases in one shot.
 
 ## Map
 
-Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots. A ring
-of empty street, tall walls and a ribbed dome close the map; monkey bars and trapezes hang from
-the dome for anyone who can grapple that high.
+Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots. Solo
+plays the tight original block. A match opens it up: a wide ring of empty street, tall walls, a
+ribbed dome that cannot be hooked, an open field in the middle, and a hanging playground of pads
+and monkey bars at mid height to swing through. Everyone starts in a different spot.
 
 ## Enemies
 

@@ -102,7 +102,7 @@ export const CONTROLS_HTML = `
     <div><b>G</b> grenade · hold it to throw further</div>
     <div><b>Tab</b> scoreboard (online) &nbsp; <b>Esc</b> pause</div>
     <div><b>Both mouse buttons</b> dash-slash once the gauge is lit</div>
-    <div><b>1-5 / wheel</b> rifle · shotgun · revolver · sniper · katana</div>
+    <div><b>1-4 / wheel</b> rifle · shotgun · sniper · katana</div>
   </div>
   <div><div class="colhead">PS5 CONTROLLER</div>
     <div><b>L stick</b> move &nbsp; <b>R stick</b> look &nbsp; <b>L3</b> sprint</div>

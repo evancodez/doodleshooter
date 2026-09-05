@@ -2,7 +2,9 @@
 import * as THREE from 'three';
 import { makeBody } from './physics.js';
 import { makeInkMaterial, INK } from './render.js';
-import { Rifle, Shotgun, Revolver, Sniper, Katana } from './weapons.js';
+import { Rifle, Shotgun, Sniper, Katana } from './weapons.js';
+// the dome shell and anything else flagged this way cannot be hooked
+const NO_GRAPPLE = (b) => !!b.data.noGrapple;
 import { clamp, damp, rand, Spring, alignYAxis } from './util.js';
 import { audio } from './audio.js';
 
@@ -18,7 +20,7 @@ export class Player {
     this.eye = new THREE.Vector3(); this.center = new THREE.Vector3(); this.forward = new THREE.Vector3(0, 0, -1); this.right = new THREE.Vector3(1, 0, 0);
     this.speed = 0; this.hurtFx = 0; this.flashFx = 0; this.lastDamageT = 10;
     this.rig = new THREE.Group(); this.camera.add(this.rig); ctx.scene.add(this.camera);
-    this.weapons = [new Rifle(ctx), new Shotgun(ctx), new Revolver(ctx), new Sniper(ctx), new Katana(ctx)]; this.katanaIndex = 4;
+    this.weapons = [new Rifle(ctx), new Shotgun(ctx), new Sniper(ctx), new Katana(ctx)]; this.katanaIndex = 3;
     for (const w of this.weapons) { this.rig.add(w.root); if (w.isGun) w.startReserve = w.reserve; }
     this.weaponIndex = 0; this.weapon = this.weapons[0]; this.weapon.equip(); this.returnT = 0; this.prevWeaponIndex = 0;
     this.recoilPitch = new Spring(190, 17); this.recoilYaw = new Spring(190, 17); this.fovKick = new Spring(220, 14); this.landDip = new Spring(170, 15);
@@ -210,7 +212,7 @@ export class Player {
     this.updateNadeArc(this._nadeHeld ? this.nadeCharge : -1);
     this.updateNades(dt);
     // ---- weapons ----
-    for (let i = 0; i < 5; i++) if (inp.pressed('slot' + (i + 1))) this.switchTo(i);
+    for (let i = 0; i < 5; i++) if (inp.pressed('slot' + (i + 1))) this.switchTo(Math.min(i, this.weapons.length - 1));
     if (inp.pressed('nextWeapon')) this.switchTo((this.weaponIndex + 1) % this.weapons.length);
     if (inp.pressed('prevWeapon')) this.switchTo((this.weaponIndex + this.weapons.length - 1) % this.weapons.length);
     const st = this._weaponState(sprinting, aiming, hs2);
@@ -324,7 +326,7 @@ export class Player {
   // so the hook stops jumping to rings above your head that you never aimed at.
   _findGrappleTarget() {
     const ctx = this.ctx, o = this.eye, d = this.forward, maxD = 75;
-    const hitW = ctx.world.raycast(o, d, maxD);
+    const hitW = ctx.world.raycast(o, d, maxD, NO_GRAPPLE);
     const wallDist = hitW ? hitW.dist : maxD;
     // exact hit on an enemy
     const hitE = ctx.enemies.raycast(o, d, Math.min(50, wallDist + 0.5));
