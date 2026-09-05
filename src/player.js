@@ -14,7 +14,7 @@ export class Player {
   constructor(ctx) {
     this.ctx = ctx; this.camera = ctx.camera; this.camera.rotation.order = 'YXZ';
     this.body = makeBody(ctx.level.playerStart, 0.35, STAND_H, 0.55);
-    this.yaw = 0; this.pitch = 0; this.maxHp = 100; this.hp = 100; this.alive = true;
+    this.yaw = 0; this.pitch = 0; this.maxHp = 120; this.hp = 120; this.alive = true; this.regenDelay = 4.5; this.regenRate = 11; this.nadeCharge = 0; this._nadeHeld = false;
     this.eye = new THREE.Vector3(); this.center = new THREE.Vector3(); this.forward = new THREE.Vector3(0, 0, -1); this.right = new THREE.Vector3(1, 0, 0);
     this.speed = 0; this.hurtFx = 0; this.flashFx = 0; this.lastDamageT = 10;
     this.rig = new THREE.Group(); this.camera.add(this.rig); ctx.scene.add(this.camera);
@@ -35,6 +35,7 @@ export class Player {
     this.hookMesh.visible = false; ctx.scene.add(this.hookMesh);
   }
   reset(pos) {
+    this.nadeCharge = 0; this._nadeHeld = false; if (this._arc) this.updateNadeArc(-1);
     const b = this.body; b.pos.copy(pos); b.vel.set(0, 0, 0); b.onGround = false; b.height = STAND_H;
     this.hp = this.maxHp; this.alive = true; this.yaw = 0; this.pitch = 0; this.roll = 0; this.hurtFx = 0; this.flashFx = 0; this.crouching = false; this.sliding = false; this.deathT = 0; this.lastDamageT = 10; this.dashCd = 0; this.airJumps = 1; this.gravityScale = 1; this.dashLock = false;
     this.detachGrapple(false);
@@ -113,7 +114,8 @@ export class Player {
     }
     this.rig.visible = true;
     // ---- look ----
-    this.yaw += inp.look.x; this.pitch = clamp(this.pitch + inp.look.y, -1.5, 1.5);
+    const lookMul = this._aiming ? (this.weapon.scope ? 0.38 : 0.62) : 1;
+    this.yaw += inp.look.x * lookMul; this.pitch = clamp(this.pitch + inp.look.y * lookMul, -1.5, 1.5);
     this.forward.set(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch));
     _fwd.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); _right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)); this.right.copy(_right);
     if (this.dashLock) {
@@ -196,14 +198,16 @@ export class Player {
     }
     this.lastGround = b.onGround;
     // ---- regen, bob, footsteps ----
-    if (this.lastDamageT > 4.5 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + 11 * dt);
+    if (this.lastDamageT > this.regenDelay && this.hp < this.maxHp && !this._sprinting) this.hp = Math.min(this.maxHp, this.hp + this.regenRate * dt);
     const hs2 = Math.hypot(b.vel.x, b.vel.z); const moving = b.onGround && hs2 > 0.6 && !this.sliding;
     this.bobAmt = damp(this.bobAmt, moving ? clamp(hs2 / 7, 0.3, 1.4) : 0, 8, dt);
     if (moving) { this.bobPhase += dt * (7 + hs2 * 0.5); this.stepDist += hs2 * dt; if (this.stepDist > (sprinting ? 2.5 : 2.0)) { this.stepDist = 0; audio.footstep(clamp(hs2 / 8, 0.3, 1)); } }
     this._updateCamera(dt);
     // ---- grenades ----
     this.nadeCd -= dt;
-    if (inp.pressed('grenade') && this.grenades > 0 && this.nadeCd <= 0) this.throwGrenade();
+    if (inp.down('grenade') && this.grenades > 0 && this.nadeCd <= 0 && this.alive && !this.dashLock) { this.nadeCharge = Math.min(1, this.nadeCharge + dt / 1.1); this._nadeHeld = true; }
+    else if (this._nadeHeld) { this._nadeHeld = false; if (this.grenades > 0 && this.nadeCd <= 0 && this.alive) this.throwGrenade(null, this.nadeCharge); this.nadeCharge = 0; }
+    this.updateNadeArc(this._nadeHeld ? this.nadeCharge : -1);
     this.updateNades(dt);
     // ---- weapons ----
     for (let i = 0; i < 5; i++) if (inp.pressed('slot' + (i + 1))) this.switchTo(i);
@@ -218,13 +222,16 @@ export class Player {
     ctx.hud.setScope(!!this.weapon.scope && this.weapon.aimAmt > 0.62);
   }
   // ---- grenades: a lobbed ink bomb with a short fuse and a big orange blast ----
-  throwGrenade(remote = null) {
+  // where a throw starts and how fast it leaves, for a given charge (0 = flick, 1 = full wind-up)
+  _nadeLaunch(charge, pos, vel) {
+    pos.copy(this.eye).addScaledVector(this.right, 0.25).addScaledVector(this.forward, 0.6); pos.y -= 0.15;
+    vel.copy(this.forward).multiplyScalar(9 + 20 * charge).addScaledVector(this.body.vel, 0.5); vel.y += 3.5 + 2.5 * charge;
+  }
+  throwGrenade(remote = null, charge = 0) {
     const ctx = this.ctx; let pos, vel;
     if (remote) { pos = new THREE.Vector3().fromArray(remote.pos); vel = new THREE.Vector3().fromArray(remote.vel); }
     else {
-      this.grenades--; this.nadeCd = 0.55;
-      pos = this.eye.clone().addScaledVector(this.right, 0.25).addScaledVector(this.forward, 0.6); pos.y -= 0.15;
-      vel = this.forward.clone().multiplyScalar(17).addScaledVector(this.body.vel, 0.5); vel.y += 4.5;
+      this.grenades--; this.nadeCd = 0.55; pos = new THREE.Vector3(); vel = new THREE.Vector3(); this._nadeLaunch(charge, pos, vel);
       this.weapon.recoil.kick(-0.4, 0.5, 1.2); this.weapon.recoilRot.kick(-3, 0, -1.5); audio.grappleFire(); ctx.input.rumble(0.2, 0.4, 50);
       if (this.onThrow) this.onThrow({ pos: pos.toArray().map((v) => +v.toFixed(2)), vel: vel.toArray().map((v) => +v.toFixed(2)) });
     }
@@ -234,6 +241,24 @@ export class Player {
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 6), makeInkMaterial({ ink: INK.ORANGE })); cap.position.y = 0.17; g.add(cap);
     g.position.copy(pos); ctx.scene.add(g);
     this.nades.push({ mesh: g, pos, vel, ang: new THREE.Vector3(rand(-6, 6), rand(-6, 6), rand(-6, 6)), fuse: 2.3, mine: !remote, rest: false, tick: 0 });
+  }
+  updateNadeArc(charge) {
+    if (!this._arc) {
+      const dots = []; const mat = makeInkMaterial({ ink: INK.BLACK, fill: true });
+      for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), mat); m.visible = false; this.ctx.scene.add(m); dots.push(m); }
+      const mark = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 5, 18), makeInkMaterial({ ink: INK.ORANGE })); mark.rotation.x = Math.PI / 2; mark.visible = false; this.ctx.scene.add(mark);
+      this._arc = { dots, mark };
+    }
+    const A = this._arc;
+    if (charge < 0) { if (A.shown) { for (const d of A.dots) d.visible = false; A.mark.visible = false; A.shown = false; } return; }
+    A.shown = true; const world = this.ctx.world; this._nadeLaunch(charge, _ap, _av); let n = 0; const step = 1 / 30;
+    for (let i = 0; i < 70 && n < A.dots.length; i++) {
+      _av.y -= 22 * step; _aprev.copy(_ap); _ap.addScaledVector(_av, step); _ad.subVectors(_ap, _aprev); const len = _ad.length();
+      if (len > 1e-6) { _ad.divideScalar(len); const hit = world.raycast(_aprev, _ad, len + 0.16); if (hit) { _ap.copy(hit.point).addScaledVector(hit.normal, 0.16); const vn = _av.dot(hit.normal); if (vn < 0) { _av.addScaledVector(hit.normal, -1.45 * vn); _av.multiplyScalar(0.55); } if (_av.length() < 1.2 && hit.normal.y > 0.5) break; } }
+      if (i % 2 === 0 && i >= 6) { const d = A.dots[n++]; d.position.copy(_ap); d.visible = true; const k = 0.8 + charge * 0.6; d.scale.setScalar(k); }
+    }
+    for (let i = n; i < A.dots.length; i++) A.dots[i].visible = false;
+    A.mark.position.copy(_ap); A.mark.position.y += 0.02; A.mark.visible = true; A.mark.scale.setScalar(0.8 + charge * 0.5);
   }
   updateNades(dt) {
     const ctx = this.ctx, world = ctx.world;
@@ -391,3 +416,4 @@ export class Player {
     this.hurtFx = damp(this.hurtFx, 0, 3, dt); this.flashFx = damp(this.flashFx, 0, 10, dt); this.speed = sp3;
   }
 }
+const _ap = new THREE.Vector3(), _av = new THREE.Vector3(), _ad = new THREE.Vector3(), _aprev = new THREE.Vector3();

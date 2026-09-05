@@ -8,7 +8,7 @@ import { rand, choose, TAU } from './util.js';
 export const LEVELS = [{ key: 'district', name: 'DOODLE DISTRICT', blurb: 'streets, rooftops and fire escapes' }];
 
 function createBuilder(scene, world) {
-  const geos = {}; const L = { rings: [], spawns: [], snipers: [], pickups: [], animated: [], meshes: [], playerStart: new THREE.Vector3(0, 0, 42), bounds: { minX: -52, maxX: 52, minZ: -52, maxZ: 52 } };
+  const geos = {}; const L = { rings: [], spawns: [], snipers: [], pickups: [], animated: [], meshes: [], playerStart: new THREE.Vector3(0, 0, 42), bounds: { minX: -72, maxX: 72, minZ: -72, maxZ: 72 } };
   const addGeo = (g, ink) => (geos[ink] || (geos[ink] = [])).push(g);
   const collider = (x, y, z, w, h, d, o = {}) => world.addBox({ x: x - w / 2, y, z: z - d / 2 }, { x: x + w / 2, y: y + h, z: z + d / 2 }, { noNav: !!o.noNav, noShoot: !!o.noShoot, tag: o.tag });
   function box(x, y, z, w, h, d, o = {}) {
@@ -98,17 +98,36 @@ function createBuilder(scene, world) {
 function buildDistrict(B) {
   const { L, box, slab, wallX, wallZ, stairs, rail, cyl, sphere, ring, spawn, sniper, pickup, planes, addGeo, collider } = B;
   // ---------------- ground + perimeter ----------------
-  box(0, -1, 0, 130, 1, 130);
-  const P = 55, T = 6, PH = 18;
+  box(0, -1, 0, 150, 1, 150);
+  const P = 72, T = 6, PH = 34;
   box(0, 0, -P, 2 * P + T, PH, T); box(0, 0, P, 2 * P + T, PH, T); box(-P, 0, 0, T, PH, 2 * P + T); box(P, 0, 0, T, PH, 2 * P + T);
   // ledges / balconies on the perimeter (grapple + stand)
-  for (const [x, z, w, d] of [[-30, -51.2, 8, 1.6], [30, -51.2, 8, 1.6], [-51.2, 40, 1.6, 8], [51.2, -10, 1.6, 8], [-51.2, -30, 1.6, 6], [51.2, 35, 1.6, 6], [10, 51.2, 8, 1.6], [-40, 51.2, 6, 1.6]]) {
-    box(x, 9, z, w, 0.4, d); box(x, 5.5, z, w, 0.4, d);
+  for (const [x, z, w, d] of [[-30, -68.2, 8, 1.6], [30, -68.2, 8, 1.6], [-68.2, 40, 1.6, 8], [68.2, -10, 1.6, 8], [-68.2, -30, 1.6, 6], [68.2, 35, 1.6, 6], [10, 68.2, 8, 1.6], [-40, 68.2, 6, 1.6], [0, -68.2, 10, 1.8], [-68.2, 0, 1.8, 10], [68.2, 0, 1.8, 10], [0, 68.2, 10, 1.8]]) {
+    box(x, 9, z, w, 0.4, d); box(x, 5.5, z, w, 0.4, d); box(x, 16, z, w, 0.4, d); ring(x, 20, z, 'y');
   }
   // spawn doorways in the perimeter (visual frames)
   const doorFrame = (x, z, alongX) => { if (alongX) { box(x - 1.2, 0, z, 0.3, 3.2, 0.5, { noCollide: true, ink: INK.BLACK }); box(x + 1.2, 0, z, 0.3, 3.2, 0.5, { noCollide: true, ink: INK.BLACK }); box(x, 3.0, z, 2.7, 0.3, 0.5, { noCollide: true, ink: INK.BLACK }); } else { box(x, 0, z - 1.2, 0.5, 3.2, 0.3, { noCollide: true, ink: INK.BLACK }); box(x, 0, z + 1.2, 0.5, 3.2, 0.3, { noCollide: true, ink: INK.BLACK }); box(x, 3.0, z, 0.5, 0.3, 2.7, { noCollide: true, ink: INK.BLACK }); } };
-  for (const [x, z] of [[-52, 0], [52, 0], [-52, 30], [52, -30], [-52, -30], [52, 30]]) { doorFrame(x, z, false); spawn(x + (x < 0 ? 1.2 : -1.2), 0, z); }
-  for (const [x, z] of [[0, -52], [0, 52], [-30, 52], [30, 52]]) { doorFrame(x, z, true); spawn(x, 0, z + (z < 0 ? 1.2 : -1.2)); }
+  for (const [x, z] of [[-69, 0], [69, 0], [-69, 30], [69, -30], [-69, -30], [69, 30]]) { doorFrame(x, z, false); spawn(x + (x < 0 ? 1.2 : -1.2), 0, z); }
+  for (const [x, z] of [[0, -69], [0, 69], [-30, 69], [30, 69]]) { doorFrame(x, z, true); spawn(x, 0, z + (z < 0 ? 1.2 : -1.2)); }
+  // the outer ring: empty streets between the old blocks and the new walls, with a little clutter
+  for (const [x, z, w, h, d] of [[-60, -20, 2.2, 2.2, 2.2], [-60, -17.6, 2.2, 2.2, 2.2], [-60, -18.8, 2.2, 2.2, 2.2], [62, 18, 2.4, 1.2, 2.4], [58, -40, 6, 0.5, 1.2], [-58, 45, 6, 0.5, 1.2], [20, 60, 1.2, 0.5, 6], [-22, -60, 1.2, 0.5, 6], [40, -62, 3, 3, 3], [-40, 62, 3, 3, 3]]) box(x, 0, z, w, h, d);
+  for (const [x, z] of [[-60, 20], [60, -20], [20, -60], [-20, 60]]) { box(x, 0, z, 0.3, 7, 0.3, { noNav: true }); box(x, 7, z, 1.4, 0.3, 0.3, { noCollide: true }); addGeo(new THREE.SphereGeometry(0.45, 8, 6).translate(x + 0.7, 6.8, z), INK.ORANGE); }
+  // a really tall dome over everything: ink ribs on the outside, an invisible lid on the inside
+  { const R = 104; const rib = (g) => addGeo(g, INK.BLUE);
+    for (let k = 0; k < 6; k++) { const g = new THREE.TorusGeometry(R, 0.55, 5, 72, Math.PI); g.rotateY(k * Math.PI / 6); rib(g); }
+    for (const h of [36, 58, 76, 90, 99]) { const r = Math.sqrt(R * R - h * h); const g = new THREE.TorusGeometry(r, 0.45, 5, 96); g.rotateX(Math.PI / 2); g.translate(0, h, 0); rib(g); }
+    addGeo(new THREE.SphereGeometry(2.2, 10, 8).translate(0, R, 0), INK.RED);
+    collider(0, 95, 0, 240, 8, 240, { noNav: true });
+    for (const [y0, inner] of [[70, 72], [75, 66], [80, 60], [85, 52], [90, 42]]) { const o = inner + 60; collider(0, y0, -o, 240, 5, 120, { noNav: true }); collider(0, y0, o, 240, 5, 120, { noNav: true }); collider(-o, y0, 0, 120, 5, 240, { noNav: true }); collider(o, y0, 0, 120, 5, 240, { noNav: true }); }
+    // monkey bars hung from the dome: a cross-hatched grid to grapple, swing and stand on
+    const Y = 56;
+    for (let i = -16; i <= 16; i += 4) { box(0, Y, i, 34, 0.32, 0.32, { noNav: true, ink: INK.BLACK }); box(i, Y + 0.34, 0, 0.32, 0.32, 34, { noNav: true, ink: INK.BLACK }); }
+    for (const [x, z] of [[-17, -17], [17, -17], [-17, 17], [17, 17]]) { const top = Math.sqrt(R * R - x * x - z * z); box(x, Y + 0.6, z, 0.25, top - Y - 0.6, 0.25, { noCollide: true, ink: INK.BLACK }); }
+    for (const [x, z] of [[-12, -12], [12, -12], [-12, 12], [12, 12], [0, 0]]) ring(x, Y - 1.4, z, 'y');
+    // four trapezes lower down so there is a way up and across
+    for (const [x, z] of [[-34, -34], [34, -34], [-34, 34], [34, 34]]) { const top = Math.sqrt(R * R - x * x - z * z); box(x, 42, z, 5, 0.3, 0.3, { noNav: true, ink: INK.BLACK }); box(x - 2.3, 42.3, z, 0.2, top - 42.3, 0.2, { noCollide: true, ink: INK.BLACK }); box(x + 2.3, 42.3, z, 0.2, top - 42.3, 0.2, { noCollide: true, ink: INK.BLACK }); ring(x, 40.6, z, 'y'); }
+    for (const [x, z] of [[0, -44], [0, 44], [-44, 0], [44, 0]]) { const top = Math.sqrt(R * R - x * x - z * z); box(x, 30, z, 4, 0.3, 0.3, { noNav: true, ink: INK.BLACK }); box(x, 30.3, z, 0.2, top - 30.3, 0.2, { noCollide: true, ink: INK.BLACK }); ring(x, 28.6, z, 'y'); }
+  }
 
   // ---------------- central tower ----------------
   {

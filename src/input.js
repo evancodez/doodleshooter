@@ -9,7 +9,7 @@ const KEYMAP = {
 };
 const MOUSEMAP = { 0: 'fire', 2: 'aim', 1: 'grapple', 3: 'grapple', 4: 'melee' };
 // Standard gamepad mapping (DualSense): 0 cross,1 circle,2 square,3 triangle,4 L1,5 R1,6 L2,7 R2,8 create,9 options,10 L3,11 R3,12-15 dpad
-const PADMAP = { 0: 'jump', 1: 'crouch', 2: 'reload', 3: 'nextWeapon', 4: 'grapple', 5: 'melee', 6: 'aim', 7: 'fire', 9: 'pause', 10: 'sprint', 11: 'grenade', 12: 'grenade', 13: 'slot5', 14: 'prevWeapon', 15: 'nextWeapon', 8: 'music', 17: 'confirm' };
+const PADMAP = { 0: 'jump', 1: 'crouch', 2: 'reload', 3: 'nextWeapon', 4: 'grapple', 5: 'melee', 6: 'aim', 7: 'fire', 9: 'pause', 10: 'sprint', 11: 'grenade', 12: 'grenade', 13: 'slot5', 14: 'prevWeapon', 15: 'nextWeapon', 8: 'score', 17: 'confirm' };
 
 export class Input {
   constructor(canvas) {
@@ -56,13 +56,16 @@ export class Input {
     window.addEventListener('gamepadconnected', (e) => { this.gamepadIndex = e.gamepad.index; });
   }
 
+  // browsers refuse a new pointer lock for about a second after Esc released the last one, so a
+  // failed request is retried until it takes or the game stops wanting it
   requestLock() {
-    try {
-      const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) p.catch(() => { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e) { /* ignore */ } });
-    } catch (err) { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e2) { /* ignore */ } }
+    this.wantLock = true; if (this.pointerLocked) return;
+    const attempt = (opts) => { try { const p = this.canvas.requestPointerLock(opts); return p && p.catch ? p : Promise.resolve(); } catch (err) { return Promise.reject(err); } };
+    attempt({ unadjustedMovement: true }).catch(() => attempt()).catch(() => {
+      clearTimeout(this._lockRetry); this._lockRetry = setTimeout(() => { if (this.wantLock && !this.pointerLocked) this.requestLock(); }, 1200);
+    });
   }
-  exitLock() { if (document.pointerLockElement) document.exitPointerLock(); }
+  exitLock() { this.wantLock = false; clearTimeout(this._lockRetry); if (document.pointerLockElement) document.exitPointerLock(); }
 
   _getPad() {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];

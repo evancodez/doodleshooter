@@ -190,3 +190,11 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 .board div.me { background: rgba(26,48,192,.1); }
 .board .foot { font-size: 16px; opacity: .7; justify-content: center; border: 0; margin-top: 6px; }
 .feed { color: var(--red); }
+
+/* live mini leaderboard in the corner during online play */
+.pvpscore { font-size: 20px; line-height: 1.2; text-align: right; }
+.pvpscore .row { display: flex; justify-content: flex-end; gap: 10px; }
+.pvpscore .row b { min-width: 28px; text-align: right; }
+.pvpscore .row.me { color: var(--red); }
+.pvpscore .row .rank { opacity: .6; }
+.pvpscore .target { font-size: 15px; opacity: .65; margin-top: 2px; }
