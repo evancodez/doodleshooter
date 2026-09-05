@@ -62,7 +62,7 @@ slashes and turns some bullets aside, and the guns use their own damage table; t
 Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots. Solo
 plays the tight original block. A match opens it up: a wide ring of empty street, tall walls, a
 ribbed dome that cannot be hooked, an open field in the middle crossed by a ruler bridge, a few
-pads hung from the dome, and big paper planes you can hook and ride. Everyone starts in a
+pads hung from the dome, and slow paper planes you can hook and ride (the solo planes too). Everyone starts in a
 different spot.
 
 ## Enemies

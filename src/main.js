@@ -307,6 +307,8 @@ function updateFocus(dt) {
 }
 
 // ---------------- free for all: spawning, death, scoring ----------------
+const HOW = { rifle: 'rifle', shotgun: 'shotgun', sniper: 'sniper', katana: 'katana', grenade: 'grenade' };
+const howWord = (src) => HOW[src] || null;
 const spawnSpots = () => (level.arenaSpawns && level.arenaSpawns.length ? level.arenaSpawns : level.spawns);
 function arenaSpawn() {
   const spots = spawnSpots(); const others = [...remote.values()].filter((r) => r.alive && r.root && r.root.visible);
@@ -324,11 +326,12 @@ function onLocalDeath() {
   if (!online()) { game.state = 'dying'; game.deathT = 0; return; }
   const killer = player.lastHitBy || null; const h = player.lastHit || {};
   const dir = h.from ? player.center.clone().sub(new THREE.Vector3().fromArray(h.from)).normalize().toArray().map((v) => +v.toFixed(2)) : null;
-  net.broadcast('pdead', { killer, dir, over: !!(h.crit || h.amount >= 90 || h.src === 'katana') });
+  const how = killer ? howWord(h.src) : null;
+  net.broadcast('pdead', { killer, dir, over: !!(h.crit || h.amount >= 90 || h.src === 'katana'), how, crit: !!h.crit });
   if (net.isHost) tallyDeath(net.id, killer);
   game.respawnT = RESPAWN; game.state = 'dying'; game.deathT = 0;
   const kn = killer && scores.get(killer) ? scores.get(killer).name : null;
-  hud.message('ERASED', kn ? 'by ' + kn : 'back in a moment', 2.2);
+  hud.message('ERASED', kn ? 'by ' + kn + (how ? ' · ' + how + (h.crit ? ' headshot' : '') : '') : 'back in a moment', 2.4);
 }
 function respawnLocal() {
   player.reset(arenaSpawn()); player.name = myName; player.lastHitBy = null; player.lastHit = null; game.state = 'play';
@@ -369,7 +372,9 @@ function endMatch(winner) {
 // ---------------- networking ----------------
 function addRemote(id, name) {
   if (remote.has(id)) { const r = remote.get(id); r.name = name; return r; }
-  const rp = new RemotePlayer(ctx, id, name, 0, INK.RED); remote.set(id, rp); return rp;
+  const rp = new RemotePlayer(ctx, id, name, 0, INK.RED);
+  rp.onDamage = (t, amount, fromPos) => { if (!ctx.canHurt(t) || !t.alive) return; hud.hitmarker(false, false); net.sendTo(t.id, 'pdmg', { amount: Math.round(amount), from: fromPos ? fromPos.toArray().map((v) => +v.toFixed(1)) : null, by: net.id, src: 'grenade' }); };
+  remote.set(id, rp); return rp;
 }
 function removeRemote(id) { const r = remote.get(id); if (r) { r.dispose(); remote.delete(id); } lobby.players.delete(id); scores.delete(id); }
 function lobbyRows() { return [...lobby.players.entries()].map(([id, p]) => ({ id, name: p.name })); }
@@ -406,8 +411,9 @@ net.on('pdmg', (d) => {
 net.on('pdead', (d, from) => {
   const r = remote.get(from); const vn = r ? r.name : 'someone'; const kn = d.killer && scores.get(d.killer) ? scores.get(d.killer).name : null;
   if (r) { r.ragdoll(d.dir ? new THREE.Vector3().fromArray(d.dir) : null, !!d.over); audio.enemyDie(r.center); }
-  if (d.killer === net.id) { game.kills++; game.addScore(100, 'ERASED ' + vn); }
-  else hud.kill(kn ? kn + ' erased ' + vn : vn + ' fell off the page', 0);
+  const how = d.how ? ' · ' + d.how + (d.crit ? ' headshot' : '') : '';
+  if (d.killer === net.id) { game.kills++; game.addScore(100, 'ERASED ' + vn + how); }
+  else hud.kill(kn ? kn + ' erased ' + vn + how : vn + ' fell off the page', 0);
   if (net.isHost) tallyDeath(from, d.killer);
 });
 net.on('nade', (d) => player.throwGrenade(d));
@@ -648,7 +654,8 @@ function step(now) {
   const w = player.weapon; if (w.isGun) hud.setAmmo(w.mag, w.reserve, w.magSize, w.reloading); else hud.setKatana();
   hud.setSlots(player.weapons.map((wp, i) => ({ name: wp.name, active: i === player.weaponIndex, ammo: wp.isGun ? wp.mag + '/' + wp.reserve : '∞', empty: wp.isGun && wp.mag === 0 && wp.reserve === 0 })));
   hud.setGrenades(player.grenades); hud.setGrappleStamina(player.grapStam); hud.setHealth(player.hp, player.maxHp); hud.setSpread(w.spreadPx); hud.update(dt);
-  hud.setFocusMeter(playing && !online() && (w.kind === 'katana' || game.katanaStreak > 0 || game.focus.active), game.focus.active ? 1 : clamp(game.katanaStreak / KATANA_CHARGE_KILLS, 0, 1), game.focus.active);
+  if (online()) hud.setFocusMeter(playing, player.grapStam, false, 'GRAPPLE');
+  else hud.setFocusMeter(playing && (w.kind === 'katana' || game.katanaStreak > 0 || game.focus.active), game.focus.active ? 1 : clamp(game.katanaStreak / KATANA_CHARGE_KILLS, 0, 1), game.focus.active, 'KATANA');
   if (game.boss) { if (game.boss.alive) hud.setBoss(game.boss.T.name, game.boss.hp / game.boss.maxHp); else { hud.setBoss(null, null); game.boss = null; } }
   audio.setIntensity(clamp((enemies.alive + game.queue.length + remote.size * 2) / 12, 0, 1) * (game.intermission > 0 ? 0.25 : 1));
   R.render(game.time, { hurt: player.hurtFx, flash: player.flashFx, slow: scale < 1 ? 1 : 0, lowHp: player.alive && player.hp < 30 ? 1 - player.hp / 30 : 0 });

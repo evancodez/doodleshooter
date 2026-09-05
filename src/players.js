@@ -136,13 +136,16 @@ export class RemotePlayer {
     J.hips.parent.rotation.x = damp(J.hips.parent.rotation.x, 0, 8, dt); if (this.face) { this.face.eyes.visible = true; this.face.xeyes.visible = false; }
     J.legL.rotation.x = s * 0.9 * w; J.legR.rotation.x = -s * 0.9 * w; J.shinL.rotation.x = Math.max(0, c) * 1.1 * w; J.shinR.rotation.x = Math.max(0, -c) * 1.1 * w;
     if (!b.onGround) { J.legL.rotation.x = -0.5; J.legR.rotation.x = 0.6; J.shinL.rotation.x = 1.0; J.shinR.rotation.x = 0.5; }
-    const blade = this.weaponIndex === 4; const aim = blade ? 0 : (this.aiming ? 1 : 0.55);
+    // guns are carried up and forward, two hands on them, tilting with where they look; the
+    // blade hangs at the side until it is raised to guard
+    const blade = this.weaponIndex === WEAPON_KINDS.length - 1; const aim = blade ? 0 : (this.aiming ? 1 : sp > 6.5 ? 0.8 : 0.95);
+    const look = clamp(this.pitch, -1.1, 1.1);
     if (blade) {
       const g = this.blocking ? 1 : 0;
       J.armR.rotation.x = -0.9 - g * 0.9 - s * 0.6 * w * (1 - g); J.armR.rotation.z = -0.3 - g * 0.5; J.foreR.rotation.x = -1.0 - g * 0.6; J.armL.rotation.x = s * 0.8 * w * (1 - g) - g * 1.4; J.foreL.rotation.x = -0.5;
     } else {
-      J.armR.rotation.x = -1.35 * aim - s * 0.6 * w * (1 - aim); J.armR.rotation.z = -0.2 * (1 - aim); J.foreR.rotation.x = -0.25;
-      J.armL.rotation.x = -1.2 * aim + s * 0.6 * w * (1 - aim); J.armL.rotation.y = 0.6 * aim; J.foreL.rotation.x = -0.5;
+      J.armR.rotation.x = (-1.35 - look * 0.85) * aim - s * 0.6 * w * (1 - aim); J.armR.rotation.z = -0.2 * (1 - aim); J.foreR.rotation.x = -0.2;
+      J.armL.rotation.x = (-1.25 - look * 0.85) * aim + s * 0.6 * w * (1 - aim); J.armL.rotation.y = 0.55 * aim; J.foreL.rotation.x = -0.45;
     }
     J.torso.rotation.x = -0.2 * w + (this.sliding ? 0.5 : 0) + (this.crouching ? 0.25 : 0); J.torso.rotation.y = -0.3 * aim;
     J.hips.position.y = (this.crouching ? 0.55 : 0.86) + Math.abs(c) * 0.07 * w;

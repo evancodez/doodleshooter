@@ -29,10 +29,11 @@ export class HUD {
     this.el.screen.addEventListener('click', () => { if (this.onScreenClick) this.onScreenClick(); });
   }
   // katana charge gauge: fills with katana kills, catches fire when a focus slash is ready
-  setFocusMeter(show, frac, ready) {
+  setFocusMeter(show, frac, ready, label = 'KATANA') {
     const m = this.el.focusmeter;
     if (show !== this._fmShow) { this._fmShow = show; m.classList.toggle('on', show); }
     if (!show) return;
+    if (label !== this._fmLabel) { this._fmLabel = label; m.querySelector('.fm-label').textContent = label; }
     const f = Math.max(0, Math.min(1, frac));
     if (Math.abs(f - (this._fmFrac ?? -1)) > 0.005) { this._fmFrac = f; this.el.fmfill.style.height = (f * 100).toFixed(1) + '%'; }
     if (ready !== this._fmReady) { this._fmReady = ready; m.classList.toggle('ready', ready); }

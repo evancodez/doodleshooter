@@ -88,8 +88,8 @@ function createBuilder(scene, world) {
     for (let i = 0; i < n; i++) {
       const g = new THREE.ConeGeometry(1.2 * sc, 4 * sc, 3); g.rotateX(Math.PI / 2);
       const m = new THREE.Mesh(g, makeInkMaterial({ ink: o.ink ?? INK.BLUE })); scene.add(m); L.meshes.push(m);
-      if (o.hook) L.grappleMovers.push({ mesh: m, radius: 2.2 * sc });
-      const r = baseR + i * (o.rStep ?? 12), h = baseH + i * (o.hStep ?? 6), ph = i * 2.1, sp = (o.speed ?? 0.12) + i * 0.03;
+      L.grappleMovers.push({ mesh: m, radius: 2.2 * sc });
+      const r = baseR + i * (o.rStep ?? 12), h = baseH + i * (o.hStep ?? 6), ph = i * 2.1, sp = (o.speed ?? 0.07) + i * 0.012;
       L.animated.push({ mesh: m, update: (t) => { const a = t * sp + ph; m.position.set(Math.cos(a) * r, h + Math.sin(a * 2.3) * 3, Math.sin(a) * r * 0.7); m.lookAt(Math.cos(a + 0.05) * r, h + Math.sin((a + 0.05) * 2.3) * 3, Math.sin(a + 0.05) * r * 0.7); m.rotateZ(Math.sin(a * 3) * 0.6); } });
     }
   }
@@ -101,7 +101,7 @@ function buildDistrict(B, arena = false) {
   const { L, box, slab, wallX, wallZ, stairs, rail, cyl, sphere, ring, spawn, sniper, pickup, planes, addGeo, collider } = B;
   // ---------------- ground + perimeter ----------------
   // solo keeps the tight old block; a match gets a far wider arena, a dome and a hanging playground
-  const P = arena ? 90 : 55, T = 6, PH = arena ? 60 : 18, E = P - 3.8, D = P - 3;
+  const P = arena ? 76 : 55, T = 6, PH = arena ? 40 : 18, E = P - 3.8, D = P - 3;
   L.bounds.minX = -P; L.bounds.maxX = P; L.bounds.minZ = -P; L.bounds.maxZ = P;
   box(0, -1, 0, 2 * P + T, 1, 2 * P + T);
   box(0, 0, -P, 2 * P + T, PH, T); box(0, 0, P, 2 * P + T, PH, T); box(-P, 0, 0, T, PH, 2 * P + T); box(P, 0, 0, T, PH, 2 * P + T);
@@ -121,21 +121,21 @@ function buildDistrict(B, arena = false) {
     for (const [x, y, z] of [[-34, 12.2, 12], [34, 12.2, 12], [-30, 7.2, -45], [16, 7.2, -45], [0, 7.4, -30], [-44, 0, -10], [44, 0, -10], [-40, 0, 40], [40, 0, 40], [0, 0, 55], [-62, 0, 0], [62, 0, 0], [0, 0, -64], [-60, 0, 60], [60, 0, -60]]) L.arenaSpawns.push(new THREE.Vector3(x, y, z));
     // a few low things on the field, nothing to hide a whole person
     box(-8, 0, 20, 3, 1, 1.2); box(10, 0, 26, 1.4, 1.2, 1.4); box(-12, 0, -8, 2.4, 0.8, 2.4); box(14, 0, -4, 2.4, 0.8, 2.4);
-    for (const [x, z] of [[-70, 30], [70, -30], [30, -70], [-30, 70]]) { box(x, 0, z, 0.3, 7, 0.3, { noNav: true }); box(x, 7, z, 1.4, 0.3, 0.3, { noCollide: true }); addGeo(new THREE.SphereGeometry(0.45, 8, 6).translate(x + 0.7, 6.8, z), INK.ORANGE); }
+    for (const [x, z] of [[-64, 30], [64, -30], [30, -64], [-30, 64]]) { box(x, 0, z, 0.3, 7, 0.3, { noNav: true }); box(x, 7, z, 1.4, 0.3, 0.3, { noCollide: true }); addGeo(new THREE.SphereGeometry(0.45, 8, 6).translate(x + 0.7, 6.8, z), INK.ORANGE); }
     // the dome: ribs to look at, plus an invisible shell of bands that stops you and shrugs off the hook
-    const R = 140, C = -30; const domeY = (x, z) => Math.sqrt(Math.max(1, R * R - x * x - z * z)) + C;
+    const R = 150, C = -45; const domeY = (x, z) => Math.sqrt(Math.max(1, R * R - x * x - z * z)) + C;
     for (let k = 0; k < 8; k++) { const g = new THREE.TorusGeometry(R, 0.6, 5, 96, Math.PI); g.rotateY(k * Math.PI / 8); g.translate(0, C, 0); addGeo(g, INK.BLUE); }
-    for (const h of [45, 65, 82, 96, 106]) { const r = Math.sqrt(R * R - (h - C) * (h - C)); const g = new THREE.TorusGeometry(r, 0.5, 5, 128); g.rotateX(Math.PI / 2); g.translate(0, h, 0); addGeo(g, INK.BLUE); }
+    for (const h of [46, 62, 76, 90, 100]) { const r = Math.sqrt(R * R - (h - C) * (h - C)); const g = new THREE.TorusGeometry(r, 0.5, 5, 128); g.rotateX(Math.PI / 2); g.translate(0, h, 0); addGeo(g, INK.BLUE); }
     addGeo(new THREE.SphereGeometry(2.4, 10, 8).translate(0, R + C, 0), INK.RED);
     const NG = { noNav: true, noGrapple: true };
-    collider(0, 104, 0, 300, 10, 300, NG);
-    for (let y0 = 60; y0 < 104; y0 += 4) { const inner = Math.sqrt(Math.max(0, R * R - (y0 + 4 - C) ** 2)); if (inner > P + T) continue; const o = inner + 80; collider(0, y0, -o, 320, 4, 160, NG); collider(0, y0, o, 320, 4, 160, NG); collider(-o, y0, 0, 160, 4, 320, NG); collider(o, y0, 0, 160, 4, 320, NG); }
+    collider(0, 100, 0, 300, 10, 300, NG);
+    for (let y0 = PH; y0 < 100; y0 += 4) { const inner = Math.sqrt(Math.max(0, R * R - (y0 + 4 - C) ** 2)); if (inner > P + T) continue; const o = inner + 80; collider(0, y0, -o, 320, 4, 160, NG); collider(0, y0, o, 320, 4, 160, NG); collider(-o, y0, 0, 160, 4, 320, NG); collider(o, y0, 0, 160, 4, 320, NG); }
     // a few pads hung from the dome, spread over the map so a swing has somewhere to land
     const cable = (x, y, z) => box(x, y, z, 0.12, Math.max(1, domeY(x, z) - y), 0.12, { noCollide: true, ink: INK.BLACK });
     const pad = (x, y, z, w, d) => { box(x, y, z, w, 0.5, d, { noNav: true }); cable(x, y + 0.5, z); ring(x, y - 1.3, z, 'y'); };
     for (const [x, y, z, w, d] of [[0, 24, 0, 8, 8], [-42, 18, -24, 6, 6], [44, 21, 30, 6, 6], [28, 27, -46, 5, 5], [-30, 30, 44, 5, 5]]) pad(x, y, z, w, d);
     // paper planes big enough to hook: they loop around the map at different heights
-    planes(4, 34, 20, { scale: 1.7, hook: true, rStep: 13, hStep: 5, speed: 0.1, ink: INK.BLUE });
+    planes(4, 30, 18, { scale: 1.7, rStep: 9, hStep: 5, speed: 0.06, ink: INK.BLUE });
   }
 
   // ---------------- central tower (solo only: a match wants the field open) ----------------
@@ -299,7 +299,7 @@ function buildDistrict(B, arena = false) {
 
   L.teamSpawns = [[-40, 0, 18], [-34, 12, 12], [-48, 7, -30], [-52, 0, 30], [-30, 7, -48]].map(([x, y, z]) => new THREE.Vector3(x, y, z));
   L.teamSpawns = [L.teamSpawns, [[40, 0, 8], [34, 12, 18], [48, 7, -30], [52, 0, 30], [16, 7, -45]].map(([x, y, z]) => new THREE.Vector3(x, y, z))];
-  planes(3, 45, 30);
+  if (!arena) planes(3, 30, 24, { rStep: 8, hStep: 5, scale: 1.4 });
   return B.finish();
 }
 
