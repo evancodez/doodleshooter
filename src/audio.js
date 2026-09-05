@@ -93,7 +93,7 @@ class Sfx {
   grappleRelease() { this.tone({ freq: 900, freqEnd: 300, dur: 0.12, gain: 0.12, type: 'sawtooth' }); }
   reelLoop(on) {
     if (!this.ctx) return;
-    if (on && !this._reel) { const ctx = this.ctx; const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 120; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; const g = ctx.createGain(); g.gain.value = 0.06; o.connect(f); f.connect(g); g.connect(this.master); o.start(); this._reel = { o, g }; }
+    if (on && !this._reel) { const ctx = this.ctx; const o = ctx.createBufferSource(); o.buffer = this.noiseBuf; o.loop = true; const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380; f.Q.value = 0.7; const g = ctx.createGain(); g.gain.value = 0.0001; g.gain.setTargetAtTime(0.05, ctx.currentTime, 0.12); o.connect(f); f.connect(g); g.connect(this.master); o.start(); this._reel = { o, g }; }
     else if (!on && this._reel) { const r = this._reel; this._reel = null; r.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05); r.o.stop(this.ctx.currentTime + 0.3); }
   }
   footstep(speedFrac = 1) { this.noise({ dur: 0.07, gain: 0.12 * speedFrac, type: 'lowpass', freq: rand(400, 800) }); }
@@ -158,7 +158,7 @@ class Sfx {
   // ---------- music: an 8-bit theme, two pulse voices, a triangle bass, an arpeggio and drums ----------
   musicOn(on) {
     if (!this.ctx) return;
-    if (on && !this._mus) { this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.13; this.musicGain.connect(this.master); this._mus = { step: 0, next: this.ctx.currentTime + 0.1, timer: setInterval(() => this._musicTick(), 80) }; }
+    if (on && !this._mus) { this.musicGain = this.ctx.createGain(); this.musicGain.gain.value = 0.13; this.musicGain.connect(this.master); this._mus = { step: 0, next: this.ctx.currentTime + 0.1, timer: setInterval(() => this._musicTick(), 100) }; }
     else if (!on && this._mus) { clearInterval(this._mus.timer); this._mus = null; if (this.musicGain) this.musicGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.2); }
   }
   get musicPlaying() { return !!this._mus; }
@@ -166,7 +166,9 @@ class Sfx {
   _musicTick() {
     const ctx = this.ctx, m = this._mus; if (!m) return; const I = this._intensity || 0; const out = this.musicGain;
     const bpm = 156, step = 60 / bpm / 4; const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
-    while (m.next < ctx.currentTime + 0.35) {
+    // a throttled tab can fall far behind; skip forward rather than replaying every missed note
+    if (m.next < ctx.currentTime - 0.8) m.next = ctx.currentTime + 0.05;
+    while (m.next < ctx.currentTime + 0.7) {
       const t = m.next, i = m.step % TUNE.length, bar = Math.floor(i / 16) % 8, s16 = i % 16;
       const chord = TUNE.chords[bar]; const root = chord[0];
       // lead: pulse, with a soft octave shadow on the second half of the loop for lift
