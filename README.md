@@ -53,15 +53,17 @@ On-screen hints follow whichever device you touched last.
 Rifle, shotgun, sniper (with scope) and a katana. Holding block with the katana parries
 some incoming bullets and returns a share of them. Katana kills charge a gauge; when it is lit you
 can dash to a marked enemy and execute it (solo only). Grenades bounce, then go off in a thick orange blast that scorches the paper; holding the
-button winds up a longer throw and shows the arc. Against other players a raised katana parries
+button winds up a longer throw and shows the arc. The grapple runs on breath: hanging drains it,
+landing refills it, and a slash through someone's rope cuts it. Against other players a raised katana parries
 slashes and turns some bullets aside, and the guns use their own damage table; the sniper still erases in one shot.
 
 ## Map
 
 Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots. Solo
 plays the tight original block. A match opens it up: a wide ring of empty street, tall walls, a
-ribbed dome that cannot be hooked, an open field in the middle, and a hanging playground of pads
-and monkey bars at mid height to swing through. Everyone starts in a different spot.
+ribbed dome that cannot be hooked, an open field in the middle crossed by a ruler bridge, a few
+pads hung from the dome, and big paper planes you can hook and ride. Everyone starts in a
+different spot.
 
 ## Enemies
 

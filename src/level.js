@@ -8,7 +8,7 @@ import { rand, choose, TAU } from './util.js';
 export const LEVELS = [{ key: 'district', name: 'DOODLE DISTRICT', blurb: 'streets, rooftops and fire escapes' }];
 
 function createBuilder(scene, world) {
-  const geos = {}; const L = { rings: [], spawns: [], snipers: [], pickups: [], animated: [], meshes: [], playerStart: new THREE.Vector3(0, 0, 42), bounds: { minX: -55, maxX: 55, minZ: -55, maxZ: 55 }, arenaSpawns: [] };
+  const geos = {}; const L = { rings: [], spawns: [], snipers: [], pickups: [], animated: [], meshes: [], playerStart: new THREE.Vector3(0, 0, 42), bounds: { minX: -55, maxX: 55, minZ: -55, maxZ: 55 }, arenaSpawns: [], grappleMovers: [] };
   const addGeo = (g, ink) => (geos[ink] || (geos[ink] = [])).push(g);
   const collider = (x, y, z, w, h, d, o = {}) => world.addBox({ x: x - w / 2, y, z: z - d / 2 }, { x: x + w / 2, y: y + h, z: z + d / 2 }, { noNav: !!o.noNav, noShoot: !!o.noShoot, noGrapple: !!o.noGrapple, tag: o.tag });
   function box(x, y, z, w, h, d, o = {}) {
@@ -83,11 +83,13 @@ function createBuilder(scene, world) {
     return L;
   }
   // a paper plane that loops overhead, purely decorative
-  function planes(n, baseR, baseH) {
+  function planes(n, baseR, baseH, o = {}) {
+    const sc = o.scale || 1;
     for (let i = 0; i < n; i++) {
-      const g = new THREE.ConeGeometry(1.2, 4, 3); g.rotateX(Math.PI / 2);
-      const m = new THREE.Mesh(g, makeInkMaterial({ ink: INK.BLUE })); scene.add(m); L.meshes.push(m);
-      const r = baseR + i * 12, h = baseH + i * 6, ph = i * 2.1, sp = 0.12 + i * 0.03;
+      const g = new THREE.ConeGeometry(1.2 * sc, 4 * sc, 3); g.rotateX(Math.PI / 2);
+      const m = new THREE.Mesh(g, makeInkMaterial({ ink: o.ink ?? INK.BLUE })); scene.add(m); L.meshes.push(m);
+      if (o.hook) L.grappleMovers.push({ mesh: m, radius: 2.2 * sc });
+      const r = baseR + i * (o.rStep ?? 12), h = baseH + i * (o.hStep ?? 6), ph = i * 2.1, sp = (o.speed ?? 0.12) + i * 0.03;
       L.animated.push({ mesh: m, update: (t) => { const a = t * sp + ph; m.position.set(Math.cos(a) * r, h + Math.sin(a * 2.3) * 3, Math.sin(a) * r * 0.7); m.lookAt(Math.cos(a + 0.05) * r, h + Math.sin((a + 0.05) * 2.3) * 3, Math.sin(a + 0.05) * r * 0.7); m.rotateZ(Math.sin(a * 3) * 0.6); } });
     }
   }
@@ -128,17 +130,12 @@ function buildDistrict(B, arena = false) {
     const NG = { noNav: true, noGrapple: true };
     collider(0, 104, 0, 300, 10, 300, NG);
     for (let y0 = 60; y0 < 104; y0 += 4) { const inner = Math.sqrt(Math.max(0, R * R - (y0 + 4 - C) ** 2)); if (inner > P + T) continue; const o = inner + 80; collider(0, y0, -o, 320, 4, 160, NG); collider(0, y0, o, 320, 4, 160, NG); collider(-o, y0, 0, 160, 4, 320, NG); collider(o, y0, 0, 160, 4, 320, NG); }
-    // the middle of the sky: pads you can land on and rows of rungs to swing between, hung from the dome
+    // a few pads hung from the dome, spread over the map so a swing has somewhere to land
     const cable = (x, y, z) => box(x, y, z, 0.12, Math.max(1, domeY(x, z) - y), 0.12, { noCollide: true, ink: INK.BLACK });
     const pad = (x, y, z, w, d) => { box(x, y, z, w, 0.5, d, { noNav: true }); cable(x, y + 0.5, z); ring(x, y - 1.3, z, 'y'); };
-    for (const [x, y, z, w, d] of [[0, 22, 0, 9, 9], [-18, 14, -14, 6, 6], [18, 14, -14, 6, 6], [-18, 14, 14, 6, 6], [18, 14, 14, 6, 6], [0, 31, -20, 5, 5], [0, 31, 20, 5, 5], [-27, 25, 0, 5, 5], [27, 25, 0, 5, 5], [0, 42, 0, 4, 4]]) pad(x, y, z, w, d);
-    const rungRow = (x1, z1, x2, z2, y) => {
-      const n = Math.round(Math.hypot(x2 - x1, z2 - z1) / 1.5); const ax = Math.abs(x2 - x1) > Math.abs(z2 - z1);
-      for (let i = 1; i < n; i++) { const t = i / n, x = x1 + (x2 - x1) * t, z = z1 + (z2 - z1) * t; box(x, y, z, ax ? 0.25 : 2.4, 0.25, ax ? 2.4 : 0.25, { noNav: true, ink: INK.BLACK }); if (i % 8 === 4) cable(x, y + 0.25, z); }
-      const cx = (x1 + x2) / 2, cz = (z1 + z2) / 2; box(cx, y + 0.3, cz, ax ? Math.abs(x2 - x1) : 0.15, 0.15, ax ? 0.15 : Math.abs(z2 - z1), { noCollide: true, ink: INK.BLACK }); ring(cx, y - 1.2, cz, 'y');
-    };
-    rungRow(-15, -14, 15, -14, 16.2); rungRow(-15, 14, 15, 14, 16.2); rungRow(-18, -11, -18, 11, 16.2); rungRow(18, -11, 18, 11, 16.2);
-    rungRow(-24.5, 0, -4.5, 0, 26); rungRow(4.5, 0, 24.5, 0, 26); rungRow(0, -17.5, 0, -4.5, 32.5); rungRow(0, 4.5, 0, 17.5, 32.5);
+    for (const [x, y, z, w, d] of [[0, 24, 0, 8, 8], [-42, 18, -24, 6, 6], [44, 21, 30, 6, 6], [28, 27, -46, 5, 5], [-30, 30, 44, 5, 5]]) pad(x, y, z, w, d);
+    // paper planes big enough to hook: they loop around the map at different heights
+    planes(4, 34, 20, { scale: 1.7, hook: true, rStep: 13, hStep: 5, speed: 0.1, ink: INK.BLUE });
   }
 
   // ---------------- central tower (solo only: a match wants the field open) ----------------
@@ -194,10 +191,11 @@ function buildDistrict(B, arena = false) {
       const lx = dir === '-x' ? -35.9 : -27.4; slab(lx - 1.1, 20.2, lx + 1.1, 24.4, y, 0.4);
       rail(lx - 1.1, 24.4, lx + 1.1, 24.4, y);
     }
-    // ruler bridge A roof -> tower floor 3 (y=12)
-    box(-16, 11.6, 6, 18.4, 0.4, 2.4, { ink: INK.ORANGE });
-    for (let i = 0; i <= 18; i++) box(-25 + i, 12, 5, 0.06, 0.02, i % 5 === 0 ? 0.6 : 0.35, { noCollide: true, ink: INK.BLACK });
-    rail(-25, 7.2, -7, 7.2, 12, { ink: INK.ORANGE });
+    // ruler bridge from the A roof: to the tower's third floor in solo, right across to building B in a match (y=12)
+    { const bx2 = arena ? 24.2 : -7; const len = bx2 + 25.2;
+      box((bx2 - 25.2) / 2, 11.6, 6, len, 0.4, 2.4, { ink: INK.ORANGE });
+      for (let i = 0; i <= Math.floor(len); i++) box(-25 + i, 12, 5, 0.06, 0.02, i % 5 === 0 ? 0.6 : 0.35, { noCollide: true, ink: INK.BLACK });
+      rail(-25, 7.2, bx2, 7.2, 12, { ink: INK.ORANGE }); if (arena) rail(-25, 4.8, bx2, 4.8, 12, { ink: INK.ORANGE }); }
     
     spawn(-34, 12, 12); spawn(-40, 0, 18); sniper(-27, 12, 6); pickup(-34, 4, 12); pickup(-30, 12, 16); pickup(-40, 8, 8);
   }

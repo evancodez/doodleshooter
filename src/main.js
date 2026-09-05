@@ -90,11 +90,27 @@ ctx.hitPlayer = (t, dmg, info) => {
   const facing = t.blocking ? _v.subVectors(player.center, t.center).normalize().dot(t.forward) : -1;
   const frontHit = /^(head|torso|arm|fore)/.test(info.part || '');
   if (facing > 0.6 && frontHit) {
-    if (info.source === 'katana') { effects.strokeBurst(info.point, INK.ORANGE, 10, 6, { life: 0.25, size: 0.04 }); audio.shieldHit(t.center); game.hitstop(0.08, 0.15); player.weapons[player.katanaIndex].cooldown = Math.max(player.weapons[player.katanaIndex].cooldown, 0.6); input.rumble(0.6, 0.3, 90); hud.tip('PARRIED', 0.9); return; }
-    if (Math.random() < 0.35) { effects.strokeBurst(info.point, INK.ORANGE, 6, 5, { life: 0.2, size: 0.03 }); audio.shieldHit(t.center); return; }
+    // a slash is only parried by a guard that just came up; a held guard still turns some bullets
+    if (info.source === 'katana') { if (t.parryWindow) { effects.strokeBurst(info.point, INK.ORANGE, 10, 6, { life: 0.25, size: 0.04 }); audio.shieldHit(t.center); game.hitstop(0.08, 0.15); player.weapons[player.katanaIndex].cooldown = Math.max(player.weapons[player.katanaIndex].cooldown, 0.6); input.rumble(0.6, 0.3, 90); hud.tip('PARRIED', 0.9); return; } }
+    else if (Math.random() < 0.35) { effects.strokeBurst(info.point, INK.ORANGE, 6, 5, { life: 0.2, size: 0.03 }); audio.shieldHit(t.center); return; }
   }
   effects.blood(info.point, info.dir, clamp(0.4 + dmg / 80, 0.4, 1.6), { ink: INK.RED }); hud.hitmarker(false, info.crit); audio.hitEnemy(t.center); t.flash();
   net.sendTo(t.id, 'pdmg', { amount: Math.round(dmg), from: player.center.toArray().map((v) => +v.toFixed(1)), by: net.id, crit: !!info.crit, src: info.source });
+};
+// a slash through another player's rope cuts it: their client drops the hook
+const _rp = new THREE.Vector3(), _rq = new THREE.Vector3();
+ctx.cutRopes = (eye, dir, range) => {
+  let cut = false;
+  for (const r of remote.values()) {
+    if (!r.alive || !r.grappling) continue;
+    _rp.set(r.body.pos.x + r.right.x * 0.35, r.body.pos.y + 1.25, r.body.pos.z + r.right.z * 0.35);
+    for (let i = 0; i <= 14; i++) {
+      _rq.lerpVectors(_rp, r.gPoint, i / 14).sub(eye); const t = _rq.dot(dir); if (t < 0.3 || t > range) continue;
+      const lat = Math.sqrt(Math.max(0, _rq.lengthSq() - t * t)); if (lat > 0.9) continue;
+      _rq.add(eye); effects.strokeBurst(_rq, INK.ORANGE, 10, 5, { life: 0.25, size: 0.035 }); net.sendTo(r.id, 'cut', {}); hud.tip('ROPE CUT', 0.9); cut = true; break;
+    }
+  }
+  return cut;
 };
 const _v = new THREE.Vector3();
 
@@ -395,6 +411,7 @@ net.on('pdead', (d, from) => {
   if (net.isHost) tallyDeath(from, d.killer);
 });
 net.on('nade', (d) => player.throwGrenade(d));
+net.on('cut', () => { if (player.grapple.state !== 'idle') { player.detachGrapple(false); effects.strokeBurst(player.center, INK.ORANGE, 8, 4, { life: 0.25, size: 0.03 }); hud.tip('your rope got cut', 1.3); input.rumble(0.5, 0.3, 80); } });
 net.on('score', (rows) => { if (!net.isHost) applyScores(rows); });
 
 let syncTick = 0;
@@ -546,7 +563,7 @@ function toLobbyScreen() { setArena(true); resetGame(); game.state = 'lobby'; ga
 // ---------------- run control ----------------
 function resetGame() {
   enemies.clear(); effects.clear(); for (const p of pickups) R.scene.remove(p.mesh); pickups.length = 0; pickupClock = 0;
-  player.maxHp = online() ? 150 : 120; player.regenDelay = online() ? 4 : 4.5; player.regenRate = online() ? 16 : 11;
+  player.maxHp = online() ? 110 : 120; player.regenDelay = online() ? 4 : 4.5; player.regenRate = online() ? 14 : 11;
   player.reset(level.playerStart); player.name = myName; player.lastHitBy = null; player.lastHit = null; enemies.mods.speed = 1; enemies.mods.damage = 1; hud.setModifier(''); hud.setBoss(null, null); game.boss = null; endFocus(); game.katanaStreak = 0;
   game.score = 0; game.kills = 0; game.combo = 0; game.wave = 0; game.intermission = 0; game.queue = []; game.time = 0; game.over = null; game.matchT = 0; hud.setScore(0, 0); hud.setTimer(''); hud.setPvpScore(null); hud.setWave(1, 0); hud.setBoard(null);
 }
@@ -630,7 +647,7 @@ function step(now) {
   audio.setListener(player.eye, player.right);
   const w = player.weapon; if (w.isGun) hud.setAmmo(w.mag, w.reserve, w.magSize, w.reloading); else hud.setKatana();
   hud.setSlots(player.weapons.map((wp, i) => ({ name: wp.name, active: i === player.weaponIndex, ammo: wp.isGun ? wp.mag + '/' + wp.reserve : '∞', empty: wp.isGun && wp.mag === 0 && wp.reserve === 0 })));
-  hud.setGrenades(player.grenades); hud.setHealth(player.hp, player.maxHp); hud.setSpread(w.spreadPx); hud.update(dt);
+  hud.setGrenades(player.grenades); hud.setGrappleStamina(player.grapStam); hud.setHealth(player.hp, player.maxHp); hud.setSpread(w.spreadPx); hud.update(dt);
   hud.setFocusMeter(playing && !online() && (w.kind === 'katana' || game.katanaStreak > 0 || game.focus.active), game.focus.active ? 1 : clamp(game.katanaStreak / KATANA_CHARGE_KILLS, 0, 1), game.focus.active);
   if (game.boss) { if (game.boss.alive) hud.setBoss(game.boss.T.name, game.boss.hp / game.boss.maxHp); else { hud.setBoss(null, null); game.boss = null; } }
   audio.setIntensity(clamp((enemies.alive + game.queue.length + remote.size * 2) / 12, 0, 1) * (game.intermission > 0 ? 0.25 : 1));

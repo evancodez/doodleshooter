@@ -340,6 +340,7 @@ export class Katana extends ViewModel {
     let any = false;
     for (const h of hits) { any = true; const point = h.enemy.center.clone(); point.y += rand(-0.2, 0.4); ctx.enemies.damage(h.enemy, this.damage, { point, dir: _v2.clone(), part: 'torso', source: 'katana', crit: false, slashDir: s }); }
     if (ctx.playersInArc) for (const t of ctx.playersInArc(P.eye, P.forward, 3.0, Math.cos(0.95))) { any = true; ctx.hitPlayer(t, 55, { point: t.center.clone(), dir: _v2.clone(), part: 'torso', source: 'katana', crit: false }); }
+    if (ctx.cutRopes && ctx.cutRopes(P.eye, P.forward, 3.4)) any = true;
     // a swing only cuts; bullets are turned aside by the raised guard, never by a slash
     if (any) { audio.katanaHit(); ctx.game.hitstop(0.07, 0.12); ctx.effects.shakeAmt += 0.12; ctx.input.rumble(0.7, 0.4, 90); this.recoil.kick(0, 0, 1.5); }
   }

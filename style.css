@@ -198,3 +198,8 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 .pvpscore .row.me { color: var(--red); }
 .pvpscore .row .rank { opacity: .6; }
 .pvpscore .target { font-size: 15px; opacity: .65; margin-top: 2px; }
+
+/* grapple breath: a sliver under the crosshair, only while it is not full */
+.gstam { position: absolute; left: 50%; top: 50%; width: 64px; height: 5px; margin-left: -32px; margin-top: 26px; border: 1.5px solid var(--ink); border-radius: 3px; opacity: .8; mix-blend-mode: multiply; }
+.gstam i { display: block; height: 100%; background: var(--ink); }
+.gstam.low { border-color: var(--red); } .gstam.low i { background: var(--red); }
