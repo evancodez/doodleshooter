@@ -44,8 +44,6 @@ function applySettings() {
   input.mouseSens = 0.0022 * settings.sens / 100; input.padSensX = 3.4 * settings.sens / 100; input.padSensY = 2.6 * settings.sens / 100; input.invertY = settings.invert;
   localStorage.setItem('doodle_sens', String(settings.sens)); localStorage.setItem('doodle_invert', settings.invert ? '1' : '0');
 }
-let devWave = Math.max(1, Math.round(Number(localStorage.getItem('doodle_devwave') || 1)));
-
 // ---------------- game state ----------------
 const FFA_TARGET = 20, FFA_TIME = 480, RESPAWN = 3.5;
 const game = ctx.game = {
@@ -496,13 +494,6 @@ function wireName(box) {
   const nb = box.querySelector('#setName'); if (!nb) return;
   nb.addEventListener('input', (e) => { myName = e.target.value.trim().slice(0, 14) || myName; localStorage.setItem('doodle_name', myName); player.name = myName; });
 }
-function devJumpHTML(label) { return `<div class="devjump" id="devjump"><label>dev: start at wave <input type="number" id="devWave" min="1" max="99" value="${devWave}"></label><button type="button" id="devGo">${label}</button></div>`; }
-function wireDevJump(onGo) {
-  const box = hud.el.panel.querySelector('#devjump'); if (!box) return;
-  box.addEventListener('click', (e) => e.stopPropagation()); box.addEventListener('keydown', (e) => e.stopPropagation());
-  const inp = box.querySelector('#devWave'); const go = () => { devWave = clamp(Math.round(Number(inp.value) || 1), 1, 99); localStorage.setItem('doodle_devwave', String(devWave)); onGo(devWave); };
-  box.querySelector('#devGo').addEventListener('click', go); inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
-}
 function checkpointHTML() {
   if (checkpoint < 5) return '';
   let h = '<div class="checkpoints"><span>checkpoints</span>';
@@ -514,8 +505,8 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 function mainHTML() {
   return `<h1>DOODLE DISTRICT</h1><h2>a scribbled survival shooter</h2>
-    <div class="mainbtns"><button type="button" id="soloBtn">PLAY SOLO<i>survive the waves</i></button><button type="button" id="onlineBtn">PLAY ONLINE<i>free for all · up to 8 players</i></button></div>
-    ${CONTROLS_HTML}${settingsHTML()}${devJumpHTML('START HERE')}${checkpointHTML()}${best ? `<div class="beststat">best score: ${best}</div>` : ''}`;
+    <div class="mainbtns"><button type="button" class="start" id="soloBtn">START<i>solo · survive the waves</i></button><button type="button" id="onlineBtn">PLAY ONLINE<i>free for all · up to 8 players</i></button></div>
+    ${CONTROLS_HTML}${settingsHTML()}${checkpointHTML()}${best ? `<div class="beststat">best score: ${best}</div>` : ''}`;
 }
 function onlineHTML() {
   return `<h1>PLAY ONLINE</h1><h2>free for all · first to ${FFA_TARGET} · up to 8 players</h2>
@@ -560,7 +551,7 @@ function showStart() {
   hud.showScreen(html);
   const p = hud.el.panel;
   if (screen === 'main') {
-    wireSettings(); wireCheckpoints((w) => beginAtWave(w)); wireDevJump((n) => beginAtWave(n));
+    wireSettings(); wireCheckpoints((w) => beginAtWave(w));
     p.querySelector('#soloBtn').addEventListener('click', (e) => { e.stopPropagation(); begin(); });
     p.querySelector('#onlineBtn').addEventListener('click', (e) => { e.stopPropagation(); screen = 'online'; showStart(); });
   } else wireOnline();
@@ -570,8 +561,8 @@ function showPause() {
     hud.showScreen(`<h1>MENU</h1><h2>free for all · lobby ${net.code}</h2><div class="scoreboard">${sortedScores().map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${esc(s.name)}</span><span>${s.kills} K · ${s.deaths} D</span></div>`).join('')}</div>${CONTROLS_HTML}${settingsHTML()}<div class="online" id="online"><div class="row"><button type="button" class="alt" id="leaveBtn">LEAVE MATCH</button></div></div><div class="go">CLICK ANYWHERE (or press ${hud.key('confirm')}) TO KEEP PLAYING</div>`);
     wireSettings(); wireOnline(); return;
   }
-  hud.showScreen(`<h1>PAUSED</h1><h2>wave ${game.wave} · score ${game.score}</h2>${CONTROLS_HTML}${settingsHTML()}${devJumpHTML('JUMP')}<div class="go">CLICK ANYWHERE (or press ${hud.key('confirm')}) TO RESUME</div>`);
-  wireSettings(); wireDevJump((n) => jumpToWave(n));
+  hud.showScreen(`<h1>PAUSED</h1><h2>wave ${game.wave} · score ${game.score}</h2>${CONTROLS_HTML}${settingsHTML()}<div class="go">CLICK ANYWHERE (or press ${hud.key('confirm')}) TO RESUME</div>`);
+  wireSettings();
 }
 function showClickToPlay() { hud.showScreen(`<h1>MATCH ON</h1><h2>free for all · first to ${FFA_TARGET}</h2><div class="go">CLICK ANYWHERE (or press ${hud.key('confirm')}) TO PLAY</div>`); }
 function showDead() {

@@ -82,11 +82,6 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 .settings b { color: var(--red); min-width: 56px; text-align: left; }
 .settings .k { opacity: .6; font-size: 17px; }
 .beststat { font-size: 22px; opacity: .8; margin-top: 4px; }
-.devjump { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; margin-top: 10px; padding-top: 8px; border-top: 1.5px dashed var(--red); color: var(--red); }
-.devjump label { display: flex; align-items: center; gap: 8px; }
-.devjump input[type=number] { width: 52px; font: inherit; font-size: 20px; color: var(--ink); border: 2px solid var(--ink); border-radius: 5px 7px 5px 6px; background: transparent; text-align: center; padding: 1px 2px; }
-.devjump button { font: inherit; font-size: 19px; color: var(--paper); background: var(--red); border: 2px solid var(--red); border-radius: 6px 8px 5px 7px / 8px 5px 7px 6px; padding: 3px 12px; cursor: pointer; transform: rotate(-1deg); }
-.devjump button:hover { filter: brightness(1.15); }
 /* sniper scope */
 .scope { position: absolute; inset: 0; opacity: 0; transition: opacity .1s; pointer-events: none; }
 .scope.on { opacity: 1; }
@@ -165,6 +160,11 @@ canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: bloc
 .mainbtns button i { display: block; font-style: normal; font-size: 16px; opacity: .8; letter-spacing: 1px; }
 .mainbtns button:nth-child(2) { transform: rotate(.7deg); background: var(--red); border-color: var(--red); }
 .mainbtns button:hover { filter: brightness(1.15); }
+.mainbtns:has(.start) { flex-direction: column; align-items: center; gap: 12px; }
+.mainbtns button.start { min-width: 420px; font-size: 54px; padding: 18px 48px; border-width: 4px; transform: rotate(-1deg); box-shadow: 6px 7px 0 rgba(0, 0, 0, .18); }
+.mainbtns button.start i { font-size: 18px; margin-top: 4px; }
+.mainbtns button.start:hover { transform: rotate(-1deg) scale(1.03); }
+.mainbtns button.start + button { transform: rotate(.7deg); }
 .online { display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 6px; }
 .online .sub { font-size: 19px; opacity: .75; }
 .online .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
