@@ -51,7 +51,9 @@ function applySettings() {
   localStorage.setItem('doodle_sens', String(settings.sens)); localStorage.setItem('doodle_invert', settings.invert ? '1' : '0');
 }
 // ---------------- game state ----------------
-const FFA_TARGET = 20, FFA_TIME = 480, RESPAWN = 3.5;
+const FFA_TARGET = 30, FFA_TIME = 720, RESPAWN = 3.5;
+let matchLeft = FFA_TIME, clockT = 0;
+const mmss = (t) => { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 const game = ctx.game = {
   state: 'start', mode: 'solo', menu: false, time: 0, hitstopT: 0, hitstopScale: 1, wave: 0, score: 0, combo: 0, comboT: 0, kills: 0, intermission: 0, queue: [], spawnT: 0, maxAlive: 6, deathT: 0,
   focus: { active: false, t: 0, chain: 0, target: null, dash: null, arm: 0, ready: false }, katanaStreak: 0, boss: null, respawnT: 0, matchT: 0, over: null, overT: 0,
@@ -408,7 +410,7 @@ function refreshScoreHud() {
 }
 function boardHTML(title = 'FREE FOR ALL') {
   const rows = sortedScores();
-  return `<h3>${title}</h3>${rows.map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${s.name}${id === net.id ? ' (you)' : ''}</span><span>${s.kills} kills · ${s.deaths} deaths</span></div>`).join('')}<div class="foot">first to ${FFA_TARGET} · lobby ${net.code || ''}</div>`;
+  return `<h3>${title}</h3>${rows.map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${s.name}${id === net.id ? ' (you)' : ''}</span><span>${s.kills} kills · ${s.deaths} deaths</span></div>`).join('')}<div class="foot">first to ${FFA_TARGET} · ${mmss(matchLeft)} left · lobby ${net.code || ''}</div>`;
 }
 function checkWin() {
   if (!net.isHost || !online() || game.over) return;
@@ -482,9 +484,10 @@ net.on('shots', (d, from) => {
 });
 net.on('cut', () => { if (player.grapple.state !== 'idle') { player.detachGrapple(false); effects.strokeBurst(player.center, INK.ORANGE, 8, 4, { life: 0.25, size: 0.03 }); hud.tip('your rope got cut', 1.3); input.rumble(0.5, 0.3, 80); } });
 net.on('score', (rows) => { if (!net.isHost) applyScores(rows); });
+net.on('clock', (d) => { if (!net.isHost) matchLeft = d.left; });
 
 // ---- idle players: a warning, then out; a lobby with nobody active in it shuts down ----
-const IDLE_FLAG = 30, IDLE_MATCH = 90, IDLE_LOBBY = 240, IDLE_WARN = 20;
+const IDLE_FLAG = 30, IDLE_MATCH = 300, IDLE_LOBBY = 600, IDLE_WARN = 20;
 let idleWarned = false, idleCheckT = 0;
 function idleUpdate(dt) {
   if (!net.active) { idleWarned = false; return; }
@@ -509,6 +512,7 @@ function netUpdate(dt) {
   if (inMatch()) for (const [id, r] of remote) { if (r.lastSeen && performance.now() - r.lastSeen > 9000) { const nm = r.name; removeRemote(id); hud.kill(nm + ' lost connection', 0); if (net.isHost) { const c = net.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } net.conns.delete(id); } net.send('leave', { id }); broadcastLobby(); sendScores(); } } }
   if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing, idle: input.idleSeconds > IDLE_FLAG }), true);
   if (shotQueue.length) net.broadcast('shots', { k: player.weapon.kind, e: shotQueue.splice(0) });
+  if (inMatch() && !game.over) { matchLeft = Math.max(0, matchLeft - dt); if (net.isHost) { clockT -= dt; if (clockT <= 0) { clockT = 2; net.send('clock', { left: Math.round(matchLeft) }); } } hud.setTimer(mmss(matchLeft)); }
   if (net.isHost && inMatch() && !game.over) { game.matchT += dt; if (game.matchT > FFA_TIME) { const rows = sortedScores(); const w = rows.length ? { id: rows[0][0], name: rows[0][1].name } : { id: net.id, name: myName }; net.send('end', w); endMatch(w); } }
 }
 function leaveOnline(reason) {
@@ -671,10 +675,10 @@ function hostStart() {
   net.send('start', { spawns, map: lobby.map || mapKey }); startMatch(false, spawns[net.id]); sendScores();
 }
 function startMatch(late, spawnIdx) {
-  game.mode = 'ffa'; setArena(true); resetGame();
+  game.mode = 'ffa'; setArena(true); resetGame(); matchLeft = FFA_TIME; clockT = 0;
   if (!scores.size) for (const [id, p] of lobby.players) scores.set(id, { name: p.name, kills: 0, deaths: 0 });
   const spots = spawnSpots(); player.reset(spawnIdx != null && spots[spawnIdx] ? spots[spawnIdx].clone() : arenaSpawn()); beginCommon(); game.state = 'play'; screen = 'lobby';
-  refreshScoreHud(); hud.message('FREE FOR ALL', late ? 'you joined a match in progress' : 'first to ' + FFA_TARGET + ' · everyone is fair game', 3);
+  refreshScoreHud(); hud.message('FREE FOR ALL', late ? 'you joined a match in progress' : 'first to ' + FFA_TARGET + ' · ' + Math.round(FFA_TIME / 60) + ' minutes · everyone is fair game', 3);
   hud.tip(`hold <b>${hud.key('score')}</b> for the scoreboard`, 5);
   // a match started by someone else's click cannot grab the mouse: ask for a click
   setTimeout(() => { if (game.state === 'play' && !input.pointerLocked && !input.usingGamepad) { game.menu = true; showClickToPlay(); } }, 250);
