@@ -361,7 +361,7 @@ function tallyDeath(victim, killer) {
   sendScores(); checkWin();
 }
 function sendScores() { const rows = [...scores.entries()].map(([id, s]) => ({ id, ...s })); net.send('score', rows); applyScores(rows); }
-function applyScores(rows) { for (const r of rows) scores.set(r.id, { name: r.name, kills: r.kills, deaths: r.deaths }); refreshScoreHud(); }
+function applyScores(rows) { scores.clear(); for (const r of rows) scores.set(r.id, { name: r.name, kills: r.kills, deaths: r.deaths }); refreshScoreHud(); }
 function sortedScores() { return [...scores.entries()].sort((a, b) => b[1].kills - a[1].kills || a[1].deaths - b[1].deaths); }
 function refreshScoreHud() {
   if (!online()) return;
@@ -404,10 +404,10 @@ net.on('refused', (d) => leaveOnline(d.reason));
 net.onPeerJoin = (from, meta) => {
   const name = String(meta && meta.name || 'doodle').slice(0, 14);
   lobby.players.set(from, { name }); addRemote(from, name); broadcastLobby();
-  if (inMatch()) { scores.set(from, { name, kills: 0, deaths: 0 }); net.sendTo(from, 'start', { late: true, spawn: farthestSpawnIndex() }); sendScores(); hud.kill(name + ' joined', 0); }
+  if (inMatch()) { if (!scores.has(from)) scores.set(from, { name, kills: 0, deaths: 0 }); net.sendTo(from, 'start', { late: true, spawn: farthestSpawnIndex() }); sendScores(); hud.kill(name + ' joined', 0); }
 };
 net.on('lobby', (d) => {
-  lobby.hostId = d.hostId; lobby.isPublic = !!d.isPublic; lobby.players.clear();
+  lobby.hostId = d.hostId; lobby.isPublic = !!d.isPublic; lobby.code = net.code; lobby.players.clear();
   for (const p of d.players) lobby.players.set(p.id, { name: p.name });
   for (const p of d.players) if (p.id !== net.id) addRemote(p.id, p.name);
   for (const id of [...remote.keys()]) if (!lobby.players.has(id)) removeRemote(id);
@@ -416,6 +416,7 @@ net.on('lobby', (d) => {
 });
 net.on('leave', (d) => { const nm = (lobby.players.get(d.id) || {}).name; removeRemote(d.id); if (inMatch()) hud.kill((nm || 'someone') + ' left', 0); renderLobby(); });
 net.on('start', (d) => { if (!net.isHost) startMatch(!!d.late, d.spawns ? d.spawns[net.id] : d.spawn); });
+net.on('startreq', () => { if (net.isHost && game.state === 'lobby') hostStart(); });
 net.on('end', (d) => endMatch(d));
 net.on('backtolobby', () => { if (!net.isHost) toLobbyScreen(); });
 net.on('pickup', (d) => { if (!net.isHost) spawnPickup(d.kind, new THREE.Vector3().fromArray(d.pos), d.id); });
@@ -462,7 +463,7 @@ function leaveOnline(reason) {
   game.menu = false; lobby.status = reason || ''; screen = 'online'; showStart();
 }
 async function createLobby(isPublic) {
-  lobby.quick = false; setStatus('opening a lobby…');
+  setStatus('opening a lobby…');
   try { await net.host({ isPublic }); }
   catch (err) { setStatus(friendlyError(err)); return; }
   lobby.isPublic = isPublic; lobby.players.clear(); lobby.players.set(net.id, { name: myName }); lobby.hostId = net.id; lobby.status = '';
@@ -474,11 +475,10 @@ async function joinLobby(code) {
   lobby.isPublic = net.isPublic; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart();
 }
 async function quickPlay() {
-  try { await net.quickJoin({ name: myName }, setStatus); lobby.isPublic = true; lobby.quick = true; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart(); return; }
+  try { await net.quickJoin({ name: myName }, setStatus); lobby.isPublic = true; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart(); return; }
   catch (err) { if (!/no open public/.test(String(err.message))) { setStatus(friendlyError(err)); return; } }
-  setStatus('no one is out there yet · opening the map for you…');
+  setStatus('no open lobbies · opening a public one for you…');
   await createLobby(true);
-  if (net.isHost) { lobby.quick = true; hostStart(); }
 }
 function friendlyError(err) {
   const m = String(err && err.message || err || ''); if (!m) return 'something went wrong';
@@ -544,8 +544,8 @@ function lobbyHTML() {
       <div class="row"><span>code</span><span class="code">${net.code}</span></div>
       <div class="hint">${lobby.isPublic ? 'this lobby is public: anyone can quick play in, or type the code' : 'private lobby: friends type this code under PLAY ONLINE → JOIN'}</div>
       <div class="plist">${rows.map((p) => `<div class="${p.id === lobby.hostId ? 'host' : ''}${p.id === net.id ? ' me' : ''}"><span>${esc(p.name)}</span><span>${p.id === net.id ? 'you' : ''}</span></div>`).join('')}</div>
-      <div class="row">${host ? `<button type="button" class="big" id="startBtn" ${n < 2 ? 'disabled' : ''}>START MATCH</button>` : '<span class="status">waiting for the host to start…</span>'}<button type="button" class="alt" id="leaveBtn">LEAVE</button></div>
-      <div class="status" id="status">${host && n < 2 ? 'waiting for one more player to join' : esc(lobby.status || '')}</div>${!host && lobby.quick ? '<div class="hint">this host is setting up · the match starts when they do</div>' : ''}
+      <div class="row"><button type="button" class="big" id="startBtn">START MATCH</button><button type="button" class="alt" id="leaveBtn">LEAVE</button></div>
+      <div class="status" id="status">${esc(lobby.status || '')}</div><div class="hint">anyone can start · ${n < 2 ? 'people can still join once it is running' : n + ' players in'}</div>
     </div>`;
 }
 function wireOnline() {
@@ -556,7 +556,7 @@ function wireOnline() {
   if (q('createBtn')) q('createBtn').addEventListener('click', () => { lockButtons(box); createLobby(box.querySelector('input[name=vis]:checked').value === 'public'); });
   if (q('joinBtn')) { q('joinBtn').addEventListener('click', () => { const c = q('codeBox').value.trim().toUpperCase(); if (!c) { setStatus('type the code your friend gave you'); return; } lockButtons(box); joinLobby(c); }); q('codeBox').addEventListener('keydown', (e) => { if (e.key === 'Enter') q('joinBtn').click(); }); }
   if (q('backBtn')) q('backBtn').addEventListener('click', () => { lobby.status = ''; screen = 'main'; showStart(); });
-  if (q('startBtn')) q('startBtn').addEventListener('click', () => hostStart());
+  if (q('startBtn')) q('startBtn').addEventListener('click', () => { if (net.isHost) hostStart(); else { net.send('startreq', {}); setStatus('asking the host to start…'); } });
   if (q('leaveBtn')) q('leaveBtn').addEventListener('click', () => leaveOnline(''));
 }
 function lockButtons(box) { for (const b of box.querySelectorAll('button')) if (b.id !== 'backBtn') b.disabled = true; }
@@ -677,7 +677,7 @@ function step(now) {
     }
   } else {
     game.time += dt; if (st === 'start' || st === 'dead' || st === 'lobby' || st === 'over') player.idleCam(game.time); effects.update(dt); if (net.active) netUpdate(dt);
-    if (st === 'over') { game.overT += dt; if (net.isHost && game.overT > 8) { if (lobby.quick) hostStart(); else { net.send('backtolobby', {}); toLobbyScreen(); } } }
+    if (st === 'over') { game.overT += dt; if (net.isHost && game.overT > 8) { net.send('backtolobby', {}); toLobbyScreen(); } }
   }
   for (const a of level.animated) a.update(game.time);
   audio.setListener(player.eye, player.right);

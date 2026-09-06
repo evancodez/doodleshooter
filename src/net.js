@@ -45,7 +45,7 @@ export class Net {
     conn.on('error', () => this._drop(conn.peer));
   }
   _drop(pid) {
-    if (!this.conns.has(pid)) return; this.conns.delete(pid);
+    if (this.leaving || !this.conns.has(pid)) return; this.conns.delete(pid);
     if (this.isHost) { if (this.onPeerLeave) this.onPeerLeave(pid); this.broadcast('leave', { id: pid }); }
     else if (pid === this.hostId) { this.connected = false; if (this.onDisconnect) this.onDisconnect(); }
   }
@@ -58,9 +58,10 @@ export class Net {
   _keepAlive(peer) { peer.on('disconnected', () => { if (this.peer === peer && !peer.destroyed) { try { peer.reconnect(); } catch (e) { /* ignore */ } } }); }
 
   // ---- lobby creation / joining ----
-  async host({ isPublic = false } = {}) {
+  async host({ isPublic = false, code = null } = {}) {
     this.leave(); this.isHost = true; this.isPublic = isPublic;
-    if (isPublic) {
+    if (code) { this.code = String(code).toUpperCase(); this.peer = await this._newPeer(PREFIX + this.code); }
+    else if (isPublic) {
       for (let slot = 0; slot < PUBLIC_SLOTS; slot++) {
         try { this.peer = await this._newPeer(PREFIX + 'PUB' + slot); this.code = 'PUB' + slot; break; } catch (e) { if (!(e && e.type === 'unavailable-id')) throw e; }
       }
@@ -83,10 +84,11 @@ export class Net {
     this._keepAlive(this.peer);
     return this.code;
   }
-  async join(code, meta = {}) {
+  async join(code, meta = {}, wantId = null) {
     this.leave(); this.isHost = false; code = String(code || '').trim().toUpperCase();
     if (!code) throw new Error('enter a lobby code');
-    this.peer = await this._newPeer(null); this.id = this.peer.id; this._keepAlive(this.peer);
+    this.peer = await this._newPeer(null);
+    this.id = this.peer.id; this._keepAlive(this.peer);
     const hostId = PREFIX + code;
     const { conn, welcome } = await this._knock(hostId, meta, JOIN_TIMEOUT);
     this._adopt(hostId, conn, welcome); return code;
@@ -131,9 +133,11 @@ export class Net {
     this.hostId = hostId; this.conns.set(hostId, conn); this.connected = true; this.isPublic = !!(welcome && welcome.isPublic); this._wire(conn);
   }
   leave() {
+    // closing our own connections must not look like other people leaving
+    this.leaving = true;
     for (const c of this.conns.values()) { try { c.close(); } catch (e) { /* ignore */ } }
     this.conns.clear(); if (this.peer) { try { this.peer.destroy(); } catch (e) { /* ignore */ } }
-    this.peer = null; this.connected = false; this.isHost = false; this.id = null; this.code = null; this.hostId = null;
+    this.peer = null; this.connected = false; this.isHost = false; this.id = null; this.code = null; this.hostId = null; this.leaving = false;
   }
 
   // ---- messaging ----
