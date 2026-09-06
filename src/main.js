@@ -436,15 +436,45 @@ function lobbyRows() { return [...lobby.players.entries()].map(([id, p]) => ({ i
 function broadcastLobby() { net.send('lobby', { players: lobbyRows(), hostId: net.id, isPublic: lobby.isPublic, map: lobby.map || mapKey }); renderLobby(); }
 const inMatch = () => ['play', 'dying', 'over'].includes(game.state);
 net.onPeerLeave = (id) => { const nm = (lobby.players.get(id) || {}).name; removeRemote(id); broadcastLobby(); if (inMatch()) { hud.kill((nm || 'someone') + ' left', 0); sendScores(); } };
-net.onDisconnect = () => leaveOnline('the host left the lobby');
+net.onDisconnect = () => { if (lobby.order && lobby.order.some((id) => id !== lobby.hostId)) migrateHost(); else leaveOnline('the host left the lobby'); };
+// ---- host transfer: when the host goes, the earliest-joined player left takes over on a generation
+// code (the old code is slow to free up on the signalling server); everyone else rejoins there
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let migrating = false;
+async function migrateHost() { if (migrating) return; migrating = true; try { await _migrateHost(); } finally { migrating = false; } }
+async function _migrateHost() {
+  const oldHost = lobby.hostId, myId = net.id; const gen = (lobby.gen || 0) + 1; lobby.gen = gen;
+  const base = (lobby.code || net.code || '').replace(/-\d+$/, ''); const code = base + '-' + gen;
+  const roster = (lobby.order || []).filter((id) => id !== oldHost && lobby.players.has(id)); if (!roster.length || !base) { leaveOnline('the host left the lobby'); return; }
+  const successor = roster[0]; const wasInMatch = inMatch();
+  if (oldHost) { const r = remote.get(oldHost); if (r) r.dispose(); remote.delete(oldHost); lobby.players.delete(oldHost); scores.delete(oldHost); }
+  hud.message('HOST LEFT', successor === myId ? 'you are hosting now' : 'moving to the new host…', 2.6);
+  if (successor === myId) {
+    let ok = false;
+    for (let tries = 0; tries < 2 && !ok; tries++) { try { await net.host({ isPublic: lobby.isPublic, code }); ok = true; } catch (e) { await sleep(800); } }
+    if (!ok) { leaveOnline('could not take over the lobby'); return; }
+    const mine = lobby.players.get(myId) || { name: myName }; lobby.players.delete(myId); lobby.players.set(net.id, mine);
+    const ms = scores.get(myId); scores.delete(myId); if (ms) scores.set(net.id, ms);
+    lobby.hostId = net.id; lobby.code = code; lobby.order = [net.id, ...roster.filter((id) => id !== myId)]; net.accepting = true;
+    if (wasInMatch) { if (game.state !== 'play' && game.state !== 'dying') game.state = 'play'; refreshScoreHud(); } else { game.state = 'lobby'; screen = 'lobby'; showStart(); }
+    broadcastLobby();
+  } else {
+    await sleep(1200);
+    const deadline = performance.now() + 20000; let joined = false;
+    while (!joined && performance.now() < deadline) { try { await net.join(code, { name: myName, prev: myId }); joined = true; } catch (e) { await sleep(1200); } }
+    if (!joined) { leaveOnline('lost the match when the host left'); return; }
+    lobby.code = code; if (!wasInMatch) { game.state = 'lobby'; screen = 'lobby'; showStart(); }
+  }
+}
 net.on('refused', (d) => leaveOnline(d.reason));
 net.onPeerJoin = (from, meta) => {
   const name = String(meta && meta.name || 'doodle').slice(0, 14);
+  if (meta && meta.prev && meta.prev !== from) { const sc = scores.get(meta.prev); if (sc) { scores.delete(meta.prev); scores.set(from, sc); } const r = remote.get(meta.prev); if (r) r.dispose(); remote.delete(meta.prev); lobby.players.delete(meta.prev); if (lobby.order) lobby.order = lobby.order.filter((id) => id !== meta.prev); }
   lobby.players.set(from, { name }); addRemote(from, name); broadcastLobby();
   if (inMatch()) { if (!scores.has(from)) scores.set(from, { name, kills: 0, deaths: 0 }); net.sendTo(from, 'start', { late: true, spawn: farthestSpawnIndex(), map: lobby.map || mapKey, broken: level.breakables.filter((b) => !b.alive).map((b) => b.id) }); sendScores(); hud.kill(name + ' joined', 0); }
 };
 net.on('lobby', (d) => {
-  lobby.hostId = d.hostId; lobby.isPublic = !!d.isPublic; lobby.code = net.code; if (d.map) lobby.map = knownMap(d.map); lobby.players.clear();
+  lobby.hostId = d.hostId; lobby.isPublic = !!d.isPublic; lobby.code = net.code; if (d.map) lobby.map = knownMap(d.map); lobby.order = d.players.map((p) => p.id); lobby.players.clear();
   for (const p of d.players) lobby.players.set(p.id, { name: p.name });
   for (const p of d.players) if (p.id !== net.id) addRemote(p.id, p.name);
   for (const id of [...remote.keys()]) if (!lobby.players.has(id)) removeRemote(id);
@@ -517,7 +547,7 @@ function netUpdate(dt) {
   if (!net.active) return; const now = performance.now() / 1000; syncTick++;
   for (const r of remote.values()) r.update(dt, now);
   // a connection that died without saying so leaves a figure standing around: drop anyone silent too long
-  if (inMatch()) for (const [id, r] of remote) { if (r.lastSeen && performance.now() - r.lastSeen > 9000) { const nm = r.name; removeRemote(id); hud.kill(nm + ' lost connection', 0); if (net.isHost) { const c = net.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } net.conns.delete(id); } net.send('leave', { id }); broadcastLobby(); sendScores(); } } }
+  if (inMatch() && !migrating) for (const [id, r] of remote) { if (r.lastSeen && performance.now() - r.lastSeen > 9000) { if (!net.isHost && id === net.hostId) { net.leave(); migrateHost(); break; } const nm = r.name; removeRemote(id); hud.kill(nm + ' lost connection', 0); if (net.isHost) { const c = net.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } net.conns.delete(id); } net.send('leave', { id }); broadcastLobby(); sendScores(); } } }
   if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing, idle: input.idleSeconds > IDLE_FLAG }), true);
   if (shotQueue.length) net.broadcast('shots', { k: player.weapon.kind, e: shotQueue.splice(0) });
   const clockOn = inMatch() && !game.over && (remote.size > 0 || !net.isHost && clockRunning);

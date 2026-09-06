@@ -91,13 +91,13 @@ export class Net {
     this.id = this.peer.id; this._keepAlive(this.peer);
     const hostId = PREFIX + code;
     const { conn, welcome } = await this._knock(hostId, meta, JOIN_TIMEOUT);
-    this._adopt(hostId, conn, welcome); return code;
+    this._adopt(hostId, conn, welcome); this.code = code; return code;
   }
   // try every public slot at the same time and take the first host that says welcome
   async quickJoin(meta = {}, onStatus = null) {
     this.leave(); this.isHost = false; this.peer = await this._newPeer(null); this.id = this.peer.id; this._keepAlive(this.peer);
     if (onStatus) onStatus('looking for an open lobby…');
-    const ids = Array.from({ length: PUBLIC_SLOTS }, (_, i) => PREFIX + 'PUB' + i);
+    const ids = []; for (let i = 0; i < PUBLIC_SLOTS; i++) for (const suf of ['', '-1', '-2', '-3']) ids.push(PREFIX + 'PUB' + i + suf);
     const winner = await new Promise((resolve) => {
       let pending = ids.length, done = false; const attempts = [];
       const settle = (val) => { if (done) return; done = true; clearTimeout(timer); this.peer.off('error', onErr); for (const a of attempts) if (!val || a.conn !== val.conn) { try { a.conn.close(); } catch (e) { /* ignore */ } } resolve(val); };
