@@ -74,7 +74,7 @@ window.__game = { ctx, game, player, enemies, nav, world, level, hud, effects, i
 
 // anything a bullet or a blade can hit besides enemies
 ctx.targets = () => [player, ...remote.values()];
-ctx.canHurt = (t) => online() && t !== player && !t.untouched && !t.away;
+ctx.canHurt = (t) => online() && t !== player;
 ctx.raycastPlayers = (o, d, maxDist) => {
   let best = null;
   for (const t of remote.values()) {
@@ -389,14 +389,8 @@ function onLocalDeath() {
   const kn = killer && scores.get(killer) ? scores.get(killer).name : null;
   hud.kill(kn ? 'erased by ' + kn + (how ? ' · ' + how + (h.crit ? ' headshot' : '') : '') : 'erased', 0);
 }
-const BENCH_AFTER = 30;
-function bench() {
-  player.benched = true; game.menu = true; input.exitLock(); hud.setBoard(null);
-  hud.showScreen(`<h1>AWAY</h1><h2>no input since you spawned · your doodle stepped off the page</h2><div class="go">CLICK ANYWHERE (or press ${hud.key('confirm')}) TO JUMP BACK IN</div>`);
-}
-function unbench() { player.benched = false; respawnLocal(); game.menu = false; hud.hideScreen(); hud.setGameplayVisible(true); if (!input.usingGamepad) input.requestLock(); }
 function respawnLocal() {
-  player.reset(arenaSpawn()); player.name = myName; player.lastHitBy = null; player.lastHit = null; game.state = 'play'; player.shieldT = 2; player.untouched = true; player.spawnedAt = input.lastActive; hud.tip('spawn protection · 2s', 1.6);
+  player.reset(arenaSpawn()); player.name = myName; player.lastHitBy = null; player.lastHit = null; game.state = 'play'; player.shieldT = 2; hud.tip('spawn protection · 2s', 1.6);
   effects.strokeBurst(player.center, INK.BLUE, 24, 6, { life: 0.5, size: 0.03 }); audio.spawn(player.center);
 }
 function tallyDeath(victim, killer) {
@@ -426,7 +420,7 @@ function checkWin() {
   if (winner) { net.send('end', winner); endMatch(winner); }
 }
 function endMatch(winner) {
-  player.benched = false; game.over = winner; game.overT = 0; game.state = 'over'; endFocus(); input.exitLock(); hud.setBoard(null);
+  game.over = winner; game.overT = 0; game.state = 'over'; endFocus(); input.exitLock(); hud.setBoard(null);
   const title = winner.id === net.id ? 'YOU WIN' : (winner.name || 'someone') + ' WINS';
   hud.setGameplayVisible(false); hud.showScreen(`<h1>${title}</h1><div class="scoreboard">${sortedScores().map(([id, s]) => `<div class="${id === net.id ? 'me' : ''}"><span>${s.name}</span><span>${s.kills} K · ${s.deaths} D</span></div>`).join('')}</div><div class="go" id="overGo">back to the lobby in a moment…</div>`);
 }
@@ -499,7 +493,7 @@ net.on('taken', (d) => { const p = pickups.find((x) => x.id === d.id); if (p) re
 net.on('take', (d) => { if (!net.isHost) return; const p = pickups.find((x) => x.id === d.id); if (p) { removePickup(p); net.send('taken', { id: d.id }); } });
 net.on('ps', (d, from) => { const r = remote.get(from); if (r) { r.push(d, performance.now() / 1000); r.lastSeen = performance.now(); } });
 net.on('pdmg', (d) => {
-  if (!player.alive || game.state !== 'play' || player.shieldT > 0 || player.untouched) return; player.lastHitBy = d.by || null; player.lastHit = { from: d.from || null, crit: !!d.crit, amount: d.amount, src: d.src };
+  if (!player.alive || game.state !== 'play' || player.shieldT > 0) return; player.lastHitBy = d.by || null; player.lastHit = { from: d.from || null, crit: !!d.crit, amount: d.amount, src: d.src };
   player.takeDamage(d.amount, d.from ? new THREE.Vector3().fromArray(d.from) : null);
 });
 net.on('pdead', (d, from) => {
@@ -556,7 +550,7 @@ function netUpdate(dt) {
   for (const r of remote.values()) r.update(dt, now);
   // a connection that died without saying so leaves a figure standing around: drop anyone silent too long
   if (inMatch() && !migrating) for (const [id, r] of remote) { if (r.lastSeen && performance.now() - r.lastSeen > 9000) { if (!net.isHost && id === net.hostId) { net.leave(); migrateHost(); break; } const nm = r.name; removeRemote(id); hud.kill(nm + ' lost connection', 0); if (net.isHost) { const c = net.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } net.conns.delete(id); } net.send('leave', { id }); broadcastLobby(); sendScores(); } } }
-  if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing, idle: input.idleSeconds > IDLE_FLAG, untouched: player.untouched, away: !!player.benched }), true);
+  if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing, idle: input.idleSeconds > IDLE_FLAG }), true);
   if (shotQueue.length) net.broadcast('shots', { k: player.weapon.kind, e: shotQueue.splice(0) });
   const clockOn = inMatch() && !game.over && (remote.size > 0 || !net.isHost && clockRunning);
   if (inMatch() && !game.over) { if (clockOn) matchLeft = Math.max(0, matchLeft - dt); if (net.isHost) { clockT -= dt; if (clockT <= 0) { clockT = 2; net.send('clock', { left: Math.round(matchLeft), on: clockOn }); } } hud.setTimer(clockOn ? mmss(matchLeft) : 'clock starts when someone joins'); }
@@ -702,7 +696,7 @@ function showDead() {
 function menuBtnHTML() { return '<div class="online menubtn"><div class="row"><button type="button" class="alt" id="menuBtn">MAIN MENU</button></div></div>'; }
 function wireMenuBtn() { const b = hud.el.panel.querySelector('#menuBtn'); if (b) b.addEventListener('click', (e) => { e.stopPropagation(); toMainMenu(); }); }
 function toMainMenu() { game.state = 'start'; game.mode = 'solo'; game.menu = false; setArena(false); resetGame(); audio.reelLoop(false); input.exitLock(); hud.setGameplayVisible(false); screen = 'main'; showStart(); }
-function toLobbyScreen() { net.inMatch = false; player.benched = false; for (const r of remote.values()) r.lastSeen = performance.now(); setArena(true); resetGame(); game.state = 'lobby'; game.over = null; game.menu = false; hud.setGameplayVisible(false); hud.setBoard(null); screen = 'lobby'; showStart(); }
+function toLobbyScreen() { net.inMatch = false; for (const r of remote.values()) r.lastSeen = performance.now(); setArena(true); resetGame(); game.state = 'lobby'; game.over = null; game.menu = false; hud.setGameplayVisible(false); hud.setBoard(null); screen = 'lobby'; showStart(); }
 
 // ---------------- run control ----------------
 function resetGame() {
@@ -724,28 +718,28 @@ function hostStart() {
   net.send('start', { spawns, map: lobby.map || mapKey }); startMatch(false, spawns[net.id]); sendScores();
 }
 function startMatch(late, spawnIdx) {
-  net.inMatch = true; player.benched = false; game.mode = 'ffa'; setArena(true); resetGame(); matchLeft = FFA_TIME; clockT = 0;
+  net.inMatch = true; game.mode = 'ffa'; setArena(true); resetGame(); matchLeft = FFA_TIME; clockT = 0;
   // nobody sends snapshots in the lobby, so the silence clock restarts here or the sweep would drop everyone
   for (const r of remote.values()) r.lastSeen = performance.now();
   if (!scores.size) for (const [id, p] of lobby.players) scores.set(id, { name: p.name, kills: 0, deaths: 0 });
-  const spots = spawnSpots(); player.reset(spawnIdx != null && spots[spawnIdx] ? spots[spawnIdx].clone() : arenaSpawn()); beginCommon(); game.state = 'play'; screen = 'lobby'; player.untouched = true; player.spawnedAt = input.lastActive;
+  const spots = spawnSpots(); player.reset(spawnIdx != null && spots[spawnIdx] ? spots[spawnIdx].clone() : arenaSpawn()); beginCommon(); game.state = 'play'; screen = 'lobby'; player.shieldT = 2;
   refreshScoreHud(); hud.message('FREE FOR ALL', late ? 'you joined a match in progress' : 'first to ' + FFA_TARGET + ' · ' + Math.round(FFA_TIME / 60) + ' minutes · everyone is fair game', 3);
   hud.tip(`hold <b>${hud.key('score')}</b> for the scoreboard`, 5);
   // a match started by someone else's click cannot grab the mouse: ask for a click
   setTimeout(() => { if (game.state === 'play' && !input.pointerLocked && !input.usingGamepad) { game.menu = true; showClickToPlay(); } }, 250);
 }
-function pause() { if (game.state !== 'play' || game.menu) return; if (!online()) game.state = 'pause'; game.menu = true; showPause(); audio.reelLoop(false); }
-function resume() { if (online()) { if (player.benched) { unbench(); return; } game.menu = false; hud.hideScreen(); hud.setGameplayVisible(true); if (!input.usingGamepad) input.requestLock(); return; } begin(); }
+function pause() { if ((game.state !== 'play' && !(game.state === 'dying' && online())) || game.menu) return; if (!online()) game.state = 'pause'; game.menu = true; showPause(); audio.reelLoop(false); }
+function resume() { if (online()) { game.menu = false; if (game.state === 'dying' && game.respawnT <= 0) game.respawnArm = input.lastActive; hud.hideScreen(); hud.setGameplayVisible(true); if (!input.usingGamepad) input.requestLock(); return; } begin(); }
 Object.assign(window.__game, { startWave, updateWaves, begin, beginAtWave, jumpToWave, resetGame, spawnPickup, focusCandidate, enterFocus, pickSpawn, startMatch, createLobby, joinLobby, quickPlay, leaveOnline, hostStart });
 hud.onScreenClick = () => {
   const st = game.state;
   if (st === 'over' || st === 'lobby') return;
   if (st === 'start') { if (screen === 'main') begin(); return; }
-  if (st === 'play' && game.menu) { resume(); return; }
+  if ((st === 'play' || st === 'dying') && game.menu) { resume(); return; }
   if (st === 'pause' || st === 'dead') resume();
 };
 canvas.addEventListener('click', () => { if (game.state === 'play' && !game.menu && !input.pointerLocked && !input.usingGamepad) input.requestLock(); });
-input.onLockChange = (locked) => { if (!locked && game.state === 'play' && !game.menu && !input.usingGamepad) pause(); };
+input.onLockChange = (locked) => { if (!locked && (game.state === 'play' || (game.state === 'dying' && online())) && !game.menu && !input.usingGamepad) pause(); };
 input.onDeviceChange = (pad) => { hud.setDevice(pad); hud.setWeapon(player.weapon.name, player.weapon.hint); };
 window.addEventListener('pagehide', () => { if (net.active) net.leave(); });
 // browsers only let audio start on a gesture; any press wakes the context if it went to sleep
@@ -764,8 +758,8 @@ function step(now) {
   input.update(dt);
   const st = game.state; const playing = st === 'play' || st === 'dying';
   if (st === 'start' || st === 'pause' || st === 'dead') { if (input.pressed('jump') || input.pressed('confirm') || (st === 'pause' && input.pressed('pause'))) hud.onScreenClick(); }
-  else if (st === 'play' && input.pressed('pause')) { if (game.menu) resume(); else { pause(); input.exitLock(); } }
-  else if (st === 'play' && game.menu && (input.pressed('jump') || input.pressed('confirm'))) resume();
+  else if ((st === 'play' || (st === 'dying' && online())) && input.pressed('pause')) { if (game.menu) resume(); else { pause(); input.exitLock(); } }
+  else if ((st === 'play' || st === 'dying') && game.menu && (input.pressed('jump') || input.pressed('confirm'))) resume();
   if (input.pressed('music')) { musicWanted = !musicWanted; localStorage.setItem('doodle_music', musicWanted ? '1' : '0'); audio.musicOn(musicWanted); hud.tip(musicWanted ? 'music on' : 'music off', 1.5); }
   if (online() && playing) {
     if (input.usingGamepad && input.pressed('score')) boardToggle = !boardToggle;
@@ -779,8 +773,6 @@ function step(now) {
   if (st === 'play' && !online()) updateFocus(dt); else endFocus();
   if (playing) {
     game.time += sdt; if (player.shieldT > 0) player.shieldT -= dt;
-    if (player.untouched && input.lastActive !== player.spawnedAt) player.untouched = false;
-    if (online() && st === 'play' && player.untouched && !player.benched && input.idleSeconds > BENCH_AFTER) bench();
     musicHealT -= dt; if (musicHealT <= 0) { musicHealT = 2; if (musicWanted && st === 'play' && !audio.musicPlaying && audio.ctx) audio.musicOn(true); if (input.anyInput) audio.resume(); }
     { const B = level.bounds, bp = player.body.pos; if (bp.x < B.minX - 8 || bp.x > B.maxX + 8 || bp.z < B.minZ - 8 || bp.z > B.maxZ + 8 || bp.y > 150) bp.y = -100; }
     player.update(sdt); enemies.update(sdt); effects.update(sdt); updatePickups(sdt); netUpdate(dt);
@@ -789,7 +781,16 @@ function step(now) {
     if (game.comboT > 0) { game.comboT -= sdt; if (game.comboT <= 0) { game.combo = 0; hud.setScore(game.score, 0); } }
     if (st === 'dying') {
       game.deathT += dt;
-      if (online()) { const before = Math.ceil(game.respawnT); game.respawnT -= dt; const left = Math.ceil(game.respawnT); if (left !== before || game.deathT <= dt) hud.message(left > 0 ? String(left) : 'GO', left > 0 ? 'back on the page in' : '', 1.1); if (game.respawnT <= 0) respawnLocal(); }
+      if (online()) {
+        const before = Math.ceil(game.respawnT); game.respawnT -= dt; const left = Math.ceil(game.respawnT);
+        if (left > 0) { if (left !== before || game.deathT <= dt) hud.message(String(left), 'back on the page in', 1.1); }
+        else if (before > 0) { game.respawnArm = input.lastActive; game.promptT = 0; }
+        else if (!game.menu) {
+          // waiting on a press: any key, button or click brings you back; pause opens the menu instead
+          game.promptT -= dt; if (game.promptT <= 0) { game.promptT = 1.4; hud.message('READY', `press ${hud.key('confirm')} · any button or click to respawn`, 1.5); }
+          if (input.lastActive !== game.respawnArm && !input.pressed('pause') && !input.down('pause')) respawnLocal();
+        }
+      }
       else if (game.deathT > 1.7) { game.state = 'dead'; showDead(); input.exitLock(); }
     }
   } else {

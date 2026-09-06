@@ -20,7 +20,7 @@ then open http://127.0.0.1:8910. On Vercel (or any static host) just deploy the 
 ## Modes
 
 - **Solo**: survive the waves. Bosses every fifth wave, checkpoints unlock at wave 5, 10, 15...
-- **Free for all**: up to eight players, first to 20 kills, with a ten minute cap shown on screen that starts once a second player is in. Anyone in the lobby can start. A player who has not touched a control since spawning cannot be hurt, so nobody farms someone who is away; two and a half minutes without input gets you kicked, with a one-click rejoin. Health
+- **Free for all**: up to eight players, first to 20 kills, with a ten minute cap shown on screen that starts once a second player is in. Anyone in the lobby can start. After the death cam a press of any button brings you back with a two second shield; two and a half minutes without input gets you kicked, with a one-click rejoin. Health
   regenerates after a few seconds out of combat (not while sprinting), so only ammo drops in.
 
 Multiplayer is peer-to-peer over WebRTC (PeerJS), so it works from a static host with no game
