@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { InkRenderer, INK, makeInkMaterial } from './render.js';
 import { World } from './physics.js';
 import { Input } from './input.js';
-import { buildLevel } from './level.js';
+import { buildLevel, LEVELS } from './level.js';
 import { NavGrid } from './nav.js';
 import { Effects } from './effects.js';
 import { EnemyManager, BOSSES } from './enemies.js';
@@ -19,16 +19,21 @@ import { rand, choose, clamp } from './util.js';
 const canvas = document.getElementById('c');
 const R = new InkRenderer(canvas);
 const world = new World();
-let level = buildLevel(R.scene, world, 'district', { arena: false });
+let mapKey = localStorage.getItem('doodle_map') || 'district'; if (!LEVELS.some((m) => m.key === mapKey)) mapKey = 'district';
+let level = buildLevel(R.scene, world, mapKey, { arena: false });
 let nav = new NavGrid(world, level.bounds, 1).build();
-let arenaLoaded = false;
-function setArena(on) {
-  if (on === arenaLoaded) return; arenaLoaded = on;
-  for (const m of level.meshes) { R.scene.remove(m); if (m.geometry) m.geometry.dispose(); }
+let loadedKey = mapKey, arenaLoaded = false;
+audio.setTune(mapKey === 'mexico' ? 'mexico' : 'district');
+// the map in play: solo uses the picked map, a match uses the host's choice; a rebuild wipes broken props
+function setLevel(key, on, force = false) {
+  if (!force && key === loadedKey && on === arenaLoaded) return; loadedKey = key; arenaLoaded = on;
+  for (const m of level.meshes) { R.scene.remove(m); if (m.geometry) m.geometry.dispose(); if (m.traverse) m.traverse((o) => { if (o !== m && o.geometry) o.geometry.dispose(); }); }
   level.animated.length = 0; world.clear();
-  level = buildLevel(R.scene, world, 'district', { arena: on }); nav = new NavGrid(world, level.bounds, 1).build();
+  level = buildLevel(R.scene, world, key, { arena: on }); nav = new NavGrid(world, level.bounds, 1).build();
   ctx.level = level; ctx.nav = nav; if (window.__game) { window.__game.level = level; window.__game.nav = nav; }
+  audio.setTune(key === 'mexico' ? 'mexico' : 'district');
 }
+const setArena = (on) => setLevel(net.active ? (lobby.map || mapKey) : mapKey, on);
 const input = new Input(canvas);
 const hud = new HUD(document.getElementById('hud'));
 const effects = new Effects(R.scene, world);
@@ -59,7 +64,7 @@ const player = ctx.player = new Player(ctx);
 player.name = myName;
 const net = new Net();
 const remote = new Map();      // peer id -> RemotePlayer
-const lobby = { players: new Map(), hostId: null, isPublic: true, status: '', code: '' };
+const lobby = { players: new Map(), hostId: null, isPublic: true, status: '', code: '', map: null };
 const scores = new Map();      // peer id -> { name, kills, deaths }
 let screen = 'main';           // which start-screen panel is showing: main | online | lobby
 window.__game = { ctx, game, player, enemies, nav, world, level, hud, effects, input, net, remote, lobby, scores };
@@ -126,6 +131,34 @@ ctx.cutRopes = (eye, dir, range) => {
   return cut;
 };
 const _v = new THREE.Vector3();
+// breakable props: bullets, blades and blasts break them, and everyone in a match sees it go
+ctx.breakHit = (br, dmg, point, dir) => {
+  if (!br.alive) return; br.hp -= dmg;
+  if (br.hp <= 0) breakProp(br, dir, true); else { effects.strokeBurst(point, br.ink, 5, 4, { life: 0.2, size: 0.03 }); audio.shieldHit(point); }
+};
+ctx.breakablesInArc = (pos, dir, range, cosHalf) => level.breakables.filter((br) => { if (!br.alive) return false; _v.subVectors(br.pos, pos); const d = _v.length(); return d < range + 0.5 && (d < 0.4 || _v.divideScalar(d).dot(dir) > cosHalf); });
+ctx.blastBreakables = (c, R) => { for (const br of level.breakables) if (br.alive && br.pos.distanceTo(c) < R * 0.9) breakProp(br, br.pos.clone().sub(c).normalize(), true); };
+function breakProp(br, dir, local, quiet = false) {
+  if (!br.alive) return; br.alive = false; world.removeBox(br.box);
+  const g = br.group, pos = br.pos; const d = dir && dir.lengthSq() > 0.01 ? dir.clone().normalize() : new THREE.Vector3(rand(-1, 1), 1, rand(-1, 1)).normalize();
+  if (quiet) { R.scene.remove(g); return; }
+  g.updateMatrixWorld(true);
+  for (const child of [...g.children]) {
+    child.updateWorldMatrix(true, false); R.scene.attach(child);
+    const v = d.clone().multiplyScalar(rand(2, 6)); v.x += rand(-3, 3); v.z += rand(-3, 3); v.y += rand(2.5, 6.5);
+    effects.debris(child, child.position, v, new THREE.Vector3(rand(-9, 9), rand(-9, 9), rand(-9, 9)), { radius: 0.14, blood: false, life: rand(6, 9) });
+  }
+  R.scene.remove(g);
+  const up = new THREE.Vector3(0, 1, 0);
+  if (br.kind === 'pinata') {
+    for (const ink of [INK.PINK, INK.ORANGE, INK.GREEN]) effects.strokeBurst(pos, ink, 16, 7, { life: 0.7, size: 0.05 });
+    effects.explosion(pos, 2.5, INK.PINK); if (!net.active || net.isHost) for (let i = 0; i < 2; i++) spawnPickup('health', pos.clone().add(new THREE.Vector3(rand(-1.2, 1.2), 0, rand(-1.2, 1.2))));
+    if (game.mode === 'solo') game.addScore(25, 'PIÑATA');
+  } else if (br.kind === 'cactus') { effects.blood(pos, d, 1.4, { ink: INK.GREEN }); effects.bloodPool(new THREE.Vector3(pos.x, 0, pos.z), 1.1, INK.GREEN); }
+  else { effects.strokeBurst(pos, br.ink, 12, 5, { life: 0.35, size: 0.04 }); effects.smoke(pos, up, 3); }
+  audio.smash(pos, br.kind === 'barrel' || br.kind === 'crate' || br.kind === 'cactus');
+  if (local && net.active) net.broadcast('brk', { id: br.id });
+}
 // every ray a gun fires this tick is sent to the others, who draw it as a tracer from the shooter's gun
 const shotQueue = [];
 ctx.onShot = (end) => { if (net.active && inMatch()) shotQueue.push(+end.x.toFixed(1), +end.y.toFixed(1), +end.z.toFixed(1)); };
@@ -134,10 +167,11 @@ const _sm = new THREE.Vector3(), _se = new THREE.Vector3();
 
 // ---------------- pickups ----------------
 const pickups = []; let pickupId = 1;
-const pmat = { ammo: makeInkMaterial({ ink: INK.BLUE }), health: makeInkMaterial({ ink: INK.GREEN }), cap: makeInkMaterial({ ink: INK.BLACK }) };
+const pmat = { ammo: makeInkMaterial({ ink: INK.BLUE }), health: makeInkMaterial({ ink: INK.GREEN }), cap: makeInkMaterial({ ink: INK.BLACK }), shell: makeInkMaterial({ ink: INK.ORANGE }) };
 function makePickup(kind) {
   const g = new THREE.Group();
   if (kind === 'ammo') { g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.5, 10), pmat.ammo)); const c = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.16, 8), pmat.cap); c.position.y = 0.33; g.add(c); const l = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.02), pmat.cap); l.position.set(0, 0, 0.24); g.add(l); }
+  else if (level.key === 'mexico') { const sh = new THREE.CylinderGeometry(0.42, 0.42, 0.22, 12, 1, false, 0, Math.PI); sh.rotateZ(Math.PI / 2); sh.rotateX(-Math.PI / 2); g.add(new THREE.Mesh(sh, pmat.shell)); const f = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.2), pmat.health); f.position.y = 0.02; g.add(f); const m = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.08, 0.14), pmat.cap); m.position.y = 0.1; g.add(m); }
   else { g.add(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.2), pmat.health), new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), pmat.health)); }
   return g;
 }
@@ -149,7 +183,7 @@ function spawnPickup(kind, pos, id = null) {
 }
 function removePickup(p) { R.scene.remove(p.mesh); const i = pickups.indexOf(p); if (i >= 0) pickups.splice(i, 1); }
 function collectPickup(p) {
-  if (p.kind === 'ammo') { player.addAmmoAll(0.4); player.grenades = Math.min(player.maxGrenades, player.grenades + 1); hud.kill('+AMMO · +GRENADE', 0); } else { player.hp = Math.min(player.maxHp, player.hp + 35); hud.kill('+35 HP', 0); }
+  if (p.kind === 'ammo') { player.addAmmoAll(0.4); player.grenades = Math.min(player.maxGrenades, player.grenades + 1); hud.kill('+AMMO · +GRENADE', 0); } else { player.hp = Math.min(player.maxHp, player.hp + 35); hud.kill(level.key === 'mexico' ? 'TACO · +35 HP' : '+35 HP', 0); }
   audio.pickup(); effects.strokeBurst(p.mesh.position, p.kind === 'ammo' ? INK.BLUE : INK.GREEN, 12, 4, { life: 0.3 });
 }
 function updatePickups(dt) {
@@ -396,7 +430,7 @@ function addRemote(id, name) {
 }
 function removeRemote(id) { const r = remote.get(id); if (r) { r.dispose(); remote.delete(id); } lobby.players.delete(id); scores.delete(id); }
 function lobbyRows() { return [...lobby.players.entries()].map(([id, p]) => ({ id, name: p.name })); }
-function broadcastLobby() { net.send('lobby', { players: lobbyRows(), hostId: net.id, isPublic: lobby.isPublic }); renderLobby(); }
+function broadcastLobby() { net.send('lobby', { players: lobbyRows(), hostId: net.id, isPublic: lobby.isPublic, map: lobby.map || mapKey }); renderLobby(); }
 const inMatch = () => ['play', 'dying', 'over'].includes(game.state);
 net.onPeerLeave = (id) => { const nm = (lobby.players.get(id) || {}).name; removeRemote(id); broadcastLobby(); if (inMatch()) { hud.kill((nm || 'someone') + ' left', 0); sendScores(); } };
 net.onDisconnect = () => leaveOnline('the host left the lobby');
@@ -404,10 +438,10 @@ net.on('refused', (d) => leaveOnline(d.reason));
 net.onPeerJoin = (from, meta) => {
   const name = String(meta && meta.name || 'doodle').slice(0, 14);
   lobby.players.set(from, { name }); addRemote(from, name); broadcastLobby();
-  if (inMatch()) { if (!scores.has(from)) scores.set(from, { name, kills: 0, deaths: 0 }); net.sendTo(from, 'start', { late: true, spawn: farthestSpawnIndex() }); sendScores(); hud.kill(name + ' joined', 0); }
+  if (inMatch()) { if (!scores.has(from)) scores.set(from, { name, kills: 0, deaths: 0 }); net.sendTo(from, 'start', { late: true, spawn: farthestSpawnIndex(), map: lobby.map || mapKey, broken: level.breakables.filter((b) => !b.alive).map((b) => b.id) }); sendScores(); hud.kill(name + ' joined', 0); }
 };
 net.on('lobby', (d) => {
-  lobby.hostId = d.hostId; lobby.isPublic = !!d.isPublic; lobby.code = net.code; lobby.players.clear();
+  lobby.hostId = d.hostId; lobby.isPublic = !!d.isPublic; lobby.code = net.code; if (d.map) lobby.map = d.map; lobby.players.clear();
   for (const p of d.players) lobby.players.set(p.id, { name: p.name });
   for (const p of d.players) if (p.id !== net.id) addRemote(p.id, p.name);
   for (const id of [...remote.keys()]) if (!lobby.players.has(id)) removeRemote(id);
@@ -415,7 +449,7 @@ net.on('lobby', (d) => {
   renderLobby();
 });
 net.on('leave', (d) => { const nm = (lobby.players.get(d.id) || {}).name; removeRemote(d.id); if (inMatch()) hud.kill((nm || 'someone') + ' left', 0); renderLobby(); });
-net.on('start', (d) => { if (!net.isHost) startMatch(!!d.late, d.spawns ? d.spawns[net.id] : d.spawn); });
+net.on('start', (d) => { if (net.isHost) return; if (d.map) lobby.map = d.map; startMatch(!!d.late, d.spawns ? d.spawns[net.id] : d.spawn); if (d.broken) for (const id of d.broken) { const br = level.breakables[id]; if (br) breakProp(br, null, false, true); } });
 net.on('startreq', () => { if (net.isHost && game.state === 'lobby') hostStart(); });
 net.on('end', (d) => endMatch(d));
 net.on('backtolobby', () => { if (!net.isHost) toLobbyScreen(); });
@@ -436,6 +470,7 @@ net.on('pdead', (d, from) => {
   if (net.isHost) tallyDeath(from, d.killer);
 });
 net.on('nade', (d) => player.throwGrenade(d));
+net.on('brk', (d) => { const br = level.breakables[d.id]; if (br) breakProp(br, null, false); });
 net.on('parry', (d) => { audio.shieldHit(player.center); input.rumble(0.35, 0.3, 60); effects.strokeBurst(player.eye.clone().addScaledVector(player.forward, 0.5), INK.ORANGE, 8, 5, { life: 0.2, size: 0.03 }); hud.kill(d.ret ? 'RETURN TO SENDER' : 'DEFLECTED', d.ret ? 25 : 0); });
 net.on('shots', (d, from) => {
   const r = remote.get(from); if (!r || !r.root || !r.alive) return;
@@ -466,7 +501,7 @@ async function createLobby(isPublic) {
   setStatus('opening a lobby…');
   try { await net.host({ isPublic }); }
   catch (err) { setStatus(friendlyError(err)); return; }
-  lobby.isPublic = isPublic; lobby.players.clear(); lobby.players.set(net.id, { name: myName }); lobby.hostId = net.id; lobby.status = '';
+  lobby.isPublic = isPublic; lobby.map = mapKey; lobby.players.clear(); lobby.players.set(net.id, { name: myName }); lobby.hostId = net.id; lobby.status = '';
   game.state = 'lobby'; screen = 'lobby'; showStart();
 }
 async function joinLobby(code) {
@@ -518,12 +553,15 @@ function checkpointHTML() {
   return h + '</div>';
 }
 function wireCheckpoints(onGo) { const box = hud.el.panel.querySelector('.checkpoints'); if (!box) return; box.addEventListener('click', (e) => { e.stopPropagation(); const b = e.target.closest('button'); if (b) onGo(Number(b.dataset.cp)); }); }
+const mapName = (k) => (LEVELS.find((m) => m.key === k) || LEVELS[0]).name;
+function mapHTML(sel, canPick) { return `<div class="mapsel" id="mapsel"><span>map</span>${LEVELS.map((m) => `<button type="button" class="mapbtn${m.key === sel ? ' on' : ''}" data-map="${m.key}" ${canPick ? '' : 'disabled'}>${m.name}<i>${m.blurb}</i></button>`).join('')}</div>`; }
+function wireMap(onPick) { const box = hud.el.panel.querySelector('#mapsel'); if (!box) return; box.addEventListener('click', (e) => { e.stopPropagation(); const b = e.target.closest('.mapbtn'); if (b && !b.disabled) onPick(b.dataset.map); }); }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 function mainHTML() {
   return `<h1>DOODLE DISTRICT</h1><h2>a scribbled survival shooter</h2>
     <div class="mainbtns"><button type="button" class="start" id="soloBtn">START<i>solo · survive the waves</i></button><button type="button" id="onlineBtn">PLAY ONLINE<i>free for all · up to 8 players</i></button></div>
-    ${CONTROLS_HTML}${settingsHTML()}${checkpointHTML()}${best ? `<div class="beststat">best score: ${best}</div>` : ''}`;
+    ${mapHTML(mapKey, true)}${CONTROLS_HTML}${settingsHTML()}${checkpointHTML()}${best ? `<div class="beststat">best score: ${best}</div>` : ''}`;
 }
 function onlineHTML() {
   return `<h1>PLAY ONLINE</h1><h2>free for all · first to ${FFA_TARGET} · up to 8 players</h2>
@@ -542,6 +580,7 @@ function lobbyHTML() {
   return `<h1>LOBBY</h1><h2>free for all · first to ${FFA_TARGET} · ${n}/${net.maxPlayers} players</h2>
     <div class="online" id="online">
       <div class="row"><span>code</span><span class="code">${net.code}</span></div>
+      ${mapHTML(lobby.map || mapKey, host)}
       <div class="hint">${lobby.isPublic ? 'this lobby is public: anyone can quick play in, or type the code' : 'private lobby: friends type this code under PLAY ONLINE → JOIN'}</div>
       <div class="plist">${rows.map((p) => `<div class="${p.id === lobby.hostId ? 'host' : ''}${p.id === net.id ? ' me' : ''}"><span>${esc(p.name)}</span><span>${p.id === net.id ? 'you' : ''}</span></div>`).join('')}</div>
       <div class="row"><button type="button" class="big" id="startBtn">START MATCH</button><button type="button" class="alt" id="leaveBtn">LEAVE</button></div>
@@ -556,6 +595,7 @@ function wireOnline() {
   if (q('createBtn')) q('createBtn').addEventListener('click', () => { lockButtons(box); createLobby(box.querySelector('input[name=vis]:checked').value === 'public'); });
   if (q('joinBtn')) { q('joinBtn').addEventListener('click', () => { const c = q('codeBox').value.trim().toUpperCase(); if (!c) { setStatus('type the code your friend gave you'); return; } lockButtons(box); joinLobby(c); }); q('codeBox').addEventListener('keydown', (e) => { if (e.key === 'Enter') q('joinBtn').click(); }); }
   if (q('backBtn')) q('backBtn').addEventListener('click', () => { lobby.status = ''; screen = 'main'; showStart(); });
+  wireMap((k) => { if (net.isHost) { lobby.map = k; broadcastLobby(); } });
   if (q('startBtn')) q('startBtn').addEventListener('click', () => { if (net.isHost) hostStart(); else { net.send('startreq', {}); setStatus('asking the host to start…'); } });
   if (q('leaveBtn')) q('leaveBtn').addEventListener('click', () => leaveOnline(''));
 }
@@ -568,7 +608,7 @@ function showStart() {
   hud.showScreen(html);
   const p = hud.el.panel;
   if (screen === 'main') {
-    wireSettings(); wireCheckpoints((w) => beginAtWave(w));
+    wireSettings(); wireCheckpoints((w) => beginAtWave(w)); wireMap((k) => { mapKey = k; localStorage.setItem('doodle_map', k); showStart(); });
     p.querySelector('#soloBtn').addEventListener('click', (e) => { e.stopPropagation(); begin(); });
     p.querySelector('#onlineBtn').addEventListener('click', (e) => { e.stopPropagation(); screen = 'online'; showStart(); });
   } else wireOnline();
@@ -594,6 +634,7 @@ function toLobbyScreen() { setArena(true); resetGame(); game.state = 'lobby'; ga
 
 // ---------------- run control ----------------
 function resetGame() {
+  if (level.breakables.some((b) => !b.alive)) setLevel(loadedKey, arenaLoaded, true);
   enemies.clear(); effects.clear(); for (const p of pickups) R.scene.remove(p.mesh); pickups.length = 0; pickupClock = 0;
   player.maxHp = online() ? 110 : 120; player.regenDelay = online() ? 4 : 4.5; player.regenRate = online() ? 14 : 11;
   player.reset(level.playerStart); player.name = myName; player.lastHitBy = null; player.lastHit = null; enemies.mods.speed = 1; enemies.mods.damage = 1; hud.setModifier(''); hud.setBoss(null, null); game.boss = null; endFocus(); game.katanaStreak = 0;
@@ -608,7 +649,7 @@ function hostStart() {
   // deal everyone a different spot, shuffled so the same people do not always start together
   setArena(true); const order = spawnSpots().map((_, i) => i); for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
   const spawns = {}; [...lobby.players.keys()].forEach((id, i) => { spawns[id] = order[i % order.length]; });
-  net.send('start', { spawns }); startMatch(false, spawns[net.id]); sendScores();
+  net.send('start', { spawns, map: lobby.map || mapKey }); startMatch(false, spawns[net.id]); sendScores();
 }
 function startMatch(late, spawnIdx) {
   game.mode = 'ffa'; setArena(true); resetGame();

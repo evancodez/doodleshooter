@@ -297,6 +297,7 @@ export class Player {
     ctx.effects.boom(c, R); audio.explosion(c); ctx.input.rumble(0.9, 0.9, 220);
     // bots: the thrower's client reports the damage (host applies it; a client's report is forwarded)
     if (n.mine) ctx.enemies.blastEnemies(c, R, 120, null);
+    if (n.mine && ctx.blastBreakables) ctx.blastBreakables(c, R);
     // me: my own grenade, or anyone else's that went off on my screen
     const d = this.center.distanceTo(c);
     if (this.alive && d < R * 0.95) { this.takeDamage(10 + 34 * (1 - d / (R * 0.95)), c); this.knockback(_v.subVectors(this.center, c).normalize(), 9); }

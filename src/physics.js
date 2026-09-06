@@ -17,6 +17,7 @@ export class World {
     this.boxes.push(b); return b;
   }
   finalize() { this.grid.clear(); for (const b of this.boxes) this._insert(b); }
+  removeBox(b) { const i = this.boxes.indexOf(b); if (i < 0) return; this.boxes.splice(i, 1); this.finalize(); }
   _key(ix, iz) { return (ix + 4096) * 8192 + (iz + 4096); }
   _insert(b) {
     const c = this.cell;

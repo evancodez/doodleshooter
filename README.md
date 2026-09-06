@@ -5,7 +5,7 @@ rooftops and canyons, slice bullets back at the doodles that fired them, lob gre
 many waves you can survive. Play alone, survive with friends, or fight them.
 
 Everything you see is generated in code with three.js. There are no models, textures or sound
-files: the paper, the ink outlines, the hatching, the enemies and the music are all procedural, including the 8-bit theme (toggle it in settings or with M).
+files: the paper, the ink outlines, the hatching, the enemies and the music are all procedural, including the 8-bit themes, one per map (toggle them in settings or with M).
 
 ## Running it
 
@@ -57,13 +57,21 @@ button winds up a longer throw and shows the arc. The grapple runs on breath: ha
 landing refills it, and a slash through someone's rope cuts it. Against other players a raised katana parries
 slashes and turns some bullets aside, and the guns use their own damage table; the sniper still erases in one shot.
 
-## Map
+## Maps
 
-Doodle District: streets, rooftops and fire escapes, with grapple rings on the high spots. Solo
-plays the tight original block. A match opens it up: a ring of empty street, walls, a
-ribbed dome that cannot be hooked, an open field in the middle crossed by a ruler bridge, a few
-pads hung from the dome, and slow paper planes you can hook and ride (the solo planes too). Everyone starts in a
-different spot.
+- **Doodle District**: streets, rooftops and fire escapes, with grapple rings on the high spots. Solo
+  plays the tight original block. A match opens it up: a ring of empty street, walls, a ribbed dome
+  that cannot be hooked, an open field in the middle crossed by a ruler bridge, a few pads hung from
+  the dome, and slow paper planes you can hook and ride (the solo planes too).
+- **Doodle Mexico**: a sun-baked pueblo. A plaza with a fountain and a giant sombrero floating over it,
+  a bandstand where three mariachis never stop playing, a church with a bell tower you can climb and
+  a domed second tower, adobe houses with roof stairs, papel picado strung across the square, a
+  market of striped stalls and hanging piñatas, a taco cart, cacti and mesas all around. Pots, crates,
+  barrels, cacti and piñatas all break under bullets, blades and blasts; piñatas drop tacos, which are
+  the health pickups here. The map plays its own mariachi waltz.
+
+Pick the map on the main menu for solo; the host picks it in the lobby for a match, and everyone
+starts in a different spot.
 
 ## Enemies
 
