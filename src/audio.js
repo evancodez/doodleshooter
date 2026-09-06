@@ -113,6 +113,8 @@ class Sfx {
   death() { this.tone({ freq: 220, freqEnd: 30, dur: 1.2, gain: 0.4, type: 'sawtooth' }); this.noise({ dur: 0.8, gain: 0.35, type: 'lowpass', freq: 800, freqEnd: 80 }); }
   hitEnemy(pos) { this.noise({ dur: 0.06, gain: 0.3, type: 'lowpass', freq: 900, pos }); this.tone({ freq: rand(200, 260), freqEnd: 120, dur: 0.1, gain: 0.15, type: 'square', pos }); }
   headshot(pos) { this.noise({ dur: 0.05, gain: 0.5, type: 'highpass', freq: 3000, pos }); this.tone({ freq: 1500, freqEnd: 500, dur: 0.09, gain: 0.2, type: 'triangle', pos }); }
+  // a kill: a short two-note ping over a thump, the kind of sound you want to hear again
+  kill(strong = false) { this.tone({ freq: 880, freqEnd: 880, dur: 0.07, gain: 0.22, type: 'square' }); this.tone({ freq: 1320, freqEnd: 1320, dur: 0.16, gain: 0.2, type: 'square', delay: 0.07 }); this.tone({ freq: 140, freqEnd: 50, dur: 0.16, gain: strong ? 0.6 : 0.35, type: 'sine' }); if (strong) this.tone({ freq: 1760, dur: 0.22, gain: 0.12, type: 'triangle', delay: 0.14 }); }
   enemyDie(pos) {
     this.tone({ freq: rand(160, 220), freqEnd: 40, dur: 0.4, gain: 0.3, type: 'sawtooth', pos });
     this.noise({ dur: 0.3, gain: 0.4, type: 'lowpass', freq: 600, freqEnd: 100, pos });

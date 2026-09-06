@@ -254,7 +254,7 @@ enemies.onKill = (e, info, over) => {
   if (info.source === 'deflect') { label = 'RETURN TO SENDER'; pts += 120; }
   if (info.source === 'fall') label = 'FELL OFF THE PAGE';
   else if (!player.body.onGround && info.source !== 'deflect') { label += ' · AIRBORNE'; pts += 40; }
-  game.addScore(pts, label);
+  game.addScore(pts, label); audio.kill(!!info.crit || e.T.boss);
   const r = Math.random(); if (r < 0.5) spawnPickup('ammo', e.body.pos); else if (r < 0.62) spawnPickup('health', e.body.pos);
 };
 enemies.onBoss = (e) => { if (!e.alive) { hud.setBoss(null, null); game.boss = null; } else { game.boss = e; hud.setBoss(e.T.name, e.hp / e.maxHp); } };
@@ -349,7 +349,7 @@ function onLocalDeath() {
   if (net.isHost) tallyDeath(net.id, killer);
   game.respawnT = RESPAWN; game.state = 'dying'; game.deathT = 0;
   const kn = killer && scores.get(killer) ? scores.get(killer).name : null;
-  hud.message('ERASED', kn ? 'by ' + kn + (how ? ' · ' + how + (h.crit ? ' headshot' : '') : '') : 'back in a moment', 2.4);
+  hud.kill(kn ? 'erased by ' + kn + (how ? ' · ' + how + (h.crit ? ' headshot' : '') : '') : 'erased', 0);
 }
 function respawnLocal() {
   player.reset(arenaSpawn()); player.name = myName; player.lastHitBy = null; player.lastHit = null; game.state = 'play'; player.shieldT = 2; hud.tip('spawn protection · 2s', 1.6);
@@ -430,7 +430,7 @@ net.on('pdead', (d, from) => {
   const r = remote.get(from); const vn = r ? r.name : 'someone'; const kn = d.killer && scores.get(d.killer) ? scores.get(d.killer).name : null;
   if (r) { r.ragdoll(d.dir ? new THREE.Vector3().fromArray(d.dir) : null, !!d.over); audio.enemyDie(r.center); }
   const how = d.how ? ' · ' + d.how + (d.crit ? ' headshot' : '') : '';
-  if (d.killer === net.id) { game.kills++; game.addScore(100, 'ERASED ' + vn + how); }
+  if (d.killer === net.id) { game.kills++; game.addScore(100, 'ERASED ' + vn + how); audio.kill(true); }
   else hud.kill(kn ? kn + ' erased ' + vn + how : vn + ' fell off the page', 0);
   if (net.isHost) tallyDeath(from, d.killer);
 });
@@ -671,7 +671,7 @@ function step(now) {
     if (game.comboT > 0) { game.comboT -= sdt; if (game.comboT <= 0) { game.combo = 0; hud.setScore(game.score, 0); } }
     if (st === 'dying') {
       game.deathT += dt;
-      if (online()) { game.respawnT -= dt; hud.setTimer('back in ' + Math.ceil(game.respawnT)); if (game.respawnT <= 0) { hud.setTimer(''); respawnLocal(); } }
+      if (online()) { const before = Math.ceil(game.respawnT); game.respawnT -= dt; const left = Math.ceil(game.respawnT); if (left !== before || game.deathT <= dt) hud.message(left > 0 ? String(left) : 'GO', left > 0 ? 'back on the page in' : '', 1.1); if (game.respawnT <= 0) respawnLocal(); }
       else if (game.deathT > 1.7) { game.state = 'dead'; showDead(); input.exitLock(); }
     }
   } else {
