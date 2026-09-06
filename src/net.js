@@ -80,7 +80,8 @@ export class Net {
   // someone knocking: a quick-play probe is told how full we are and only seated once it says it is staying
   _incoming(conn) {
     conn.on('open', () => {
-      if (!this.accepting || this.conns.size >= this.maxPlayers - 1) { conn.send({ t: 'refused', d: { reason: this.accepting ? 'that lobby is full' : 'that lobby is closed' } }); setTimeout(() => { try { conn.close(); } catch (e) { /* ignore */ } }, 400); return; }
+      // a full lobby still says who it is, so the lobby list can show it
+      if (!this.accepting || this.conns.size >= this.maxPlayers - 1) { conn.send({ t: 'refused', d: { reason: this.accepting ? 'that lobby is full' : 'that lobby is closed', code: this.aliasCode || this.code, players: this.conns.size + 1, max: this.maxPlayers, inMatch: !!this.inMatch, hostName: this.hostName } }); setTimeout(() => { try { conn.close(); } catch (e) { /* ignore */ } }, 600); return; }
       const seat = () => { if (this.conns.has(conn.peer)) return; this.conns.set(conn.peer, conn); this._wire(conn); if (this.onPeerJoin) this.onPeerJoin(conn.peer, conn.metadata || {}); };
       const welcome = { hostId: this.id, code: this.aliasCode || this.code, isPublic: this.isPublic, players: this.conns.size + 1, max: this.maxPlayers, inMatch: !!this.inMatch, hostName: this.hostName };
       if (conn.metadata && conn.metadata.probe) {
@@ -108,8 +109,8 @@ export class Net {
     this.id = this.peer.id; this._keepAlive(this.peer);
     // a lobby that changed hosts lives on a generation code; the plain code still finds it
     const base = code.replace(/-\d+$/, ''); const ids = [code, ...['-1', '-2', '-3'].map((suf) => base + suf).filter((c) => c !== code)].map((c) => PREFIX + c);
-    const { hostId, conn, welcome } = await this._knockAny(ids, meta, JOIN_TIMEOUT);
-    this._adopt(hostId, conn, welcome); this.code = (welcome && welcome.code) || hostId.slice(PREFIX.length); return this.code;
+    let res; try { res = await this._knockAny(ids, meta, JOIN_TIMEOUT); } catch (e) { this.leave(); throw e; }
+    const { hostId, conn, welcome } = res; this._adopt(hostId, conn, welcome); this.code = (welcome && welcome.code) || hostId.slice(PREFIX.length); return this.code;
   }
   // try every public slot at the same time and take the first host that says welcome
   async quickJoin(meta = {}, onStatus = null) {

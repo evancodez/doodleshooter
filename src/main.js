@@ -566,18 +566,18 @@ function leaveOnline(reason) {
 async function createLobby(isPublic) {
   setStatus('opening a lobby…');
   try { await net.host({ isPublic }); }
-  catch (err) { setStatus(friendlyError(err)); return; }
+  catch (err) { setStatus(friendlyError(err)); unlockButtons(); return; }
   lobby.isPublic = isPublic; lobby.map = mapKey; lobby.players.clear(); lobby.players.set(net.id, { name: myName }); lobby.hostId = net.id; lobby.status = '';
   game.state = 'lobby'; screen = 'lobby'; showStart();
 }
 async function joinLobby(code) {
   setStatus('connecting…');
-  try { await net.join(code, { name: myName }); } catch (err) { setStatus(friendlyError(err)); return; }
+  try { await net.join(code, { name: myName }); } catch (err) { setStatus(friendlyError(err)); unlockButtons(); return; }
   lobby.isPublic = net.isPublic; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart();
 }
 async function quickPlay() {
   try { await net.quickJoin({ name: myName }, setStatus); lobby.isPublic = true; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart(); return; }
-  catch (err) { if (!/no open public/.test(String(err.message))) { setStatus(friendlyError(err)); return; } }
+  catch (err) { if (!/no open public/.test(String(err.message))) { setStatus(friendlyError(err)); unlockButtons(); return; } }
   setStatus('no open lobbies · opening a public one for you…');
   await createLobby(true);
 }
@@ -587,7 +587,8 @@ function friendlyError(err) {
   if (/timed out|signalling/.test(m)) return 'could not reach the matchmaking server · check your connection';
   if (/no lobby with that code/.test(m)) return 'no lobby with that code · check it with your friend';
   if (/no answer/.test(m)) return 'found the lobby but could not connect · one of you may be on a network that blocks it';
-  if (/full/.test(m)) return 'that lobby is full';
+  if (/full/.test(m)) return 'that lobby is full · try another code';
+  if (/leave the lobby/.test(m)) return 'leave your lobby first';
   return m;
 }
 function setStatus(t) { lobby.status = t; const el = hud.el.panel.querySelector('#status'); if (el) el.textContent = t; }
@@ -664,8 +665,8 @@ function lobbyListHTML() {
 }
 async function refreshLobbies() {
   if (listBusy || net.active) return; listBusy = true; const box = hud.el.panel.querySelector('#lobbyRows'); if (box) box.innerHTML = lobbyListHTML();
-  try { lobbyList = await net.listLobbies({ name: myName }); } catch (e) { lobbyList = []; }
-  listBusy = false; const rows = hud.el.panel.querySelector('#lobbyRows'); if (rows) rows.innerHTML = lobbyListHTML();
+  let err = null; try { lobbyList = await net.listLobbies({ name: myName }); } catch (e) { lobbyList = []; err = e; }
+  listBusy = false; const rows = hud.el.panel.querySelector('#lobbyRows'); if (rows) rows.innerHTML = err ? `<div class="hint">could not look: ${esc(friendlyError(err))}</div>` : lobbyListHTML();
 }
 function wireOnline() {
   const box = hud.el.panel.querySelector('#online'); if (!box) return;
@@ -683,6 +684,7 @@ function wireOnline() {
   if (q('leaveBtn')) q('leaveBtn').addEventListener('click', () => { lobby.rejoinCode = null; leaveOnline(''); });
 }
 function lockButtons(box) { for (const b of box.querySelectorAll('button')) if (b.id !== 'backBtn') b.disabled = true; }
+function unlockButtons() { const box = hud.el.panel.querySelector('#online'); if (box) for (const b of box.querySelectorAll('button')) b.disabled = false; }
 function renderLobby() { if (game.state === 'lobby') showStart(); }
 function showStart() {
   hud.setGameplayVisible(false);
