@@ -51,7 +51,7 @@ function applySettings() {
   localStorage.setItem('doodle_sens', String(settings.sens)); localStorage.setItem('doodle_invert', settings.invert ? '1' : '0');
 }
 // ---------------- game state ----------------
-const FFA_TARGET = 20, FFA_TIME = 600, RESPAWN = 3.5;
+const FFA_TARGET = 20, FFA_TIME = 600, RESPAWN = 2.5;
 let matchLeft = FFA_TIME, clockT = 0, clockRunning = false;
 const mmss = (t) => { t = Math.max(0, Math.ceil(t)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
 const game = ctx.game = {
