@@ -660,7 +660,7 @@ let lobbyList = null, listBusy = false;
 function lobbyListHTML() {
   if (listBusy) return '<div class="hint">looking…</div>';
   if (!lobbyList) return '<div class="hint">press refresh to look for open lobbies</div>';
-  if (!lobbyList.length) return '<div class="hint">hit QUICK PLAY to join a lobby · people show up fast</div>';
+  if (!lobbyList.length) return '<div class="hint">hit QUICK PLAY to join a lobby</div>';
   return lobbyList.map((l) => `<div class="lobbyrow"><span class="code">${esc(l.code)}</span><span>${esc(l.hostName || 'someone')}'s lobby</span><span>${l.players}/${l.max}${l.inMatch ? ' · in a match' : ''}</span>${l.full ? '<span class="status">full</span>' : `<button type="button" data-join="${esc(l.code)}">JOIN</button>`}</div>`).join('');
 }
 async function refreshLobbies() {
