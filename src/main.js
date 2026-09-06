@@ -232,9 +232,10 @@ function startWave(n) {
   const allowed = boss || n < 4 ? 1 : n < 6 ? 3 : MODIFIERS.length; const mod = MODIFIERS[Math.floor(Math.random() * allowed)];
   mod.apply(); enemies.mods.damage *= 1.2; hud.setModifier(mod.name);
   const swarm = mod.name.startsWith('SWARM');
-  game.maxAlive = Math.min(4 + Math.floor(n * 0.9) + (swarm ? 3 : 0), swarm ? 22 : 18);
-  let count = Math.round(Math.min(5 + n * 2.0, 32) * (swarm ? 1.35 : 1));
-  if (boss) { count = Math.min(7 + n, 16); game.queue.push(bossFor(n)); }
+  // the crowd on screen and the wave size both keep growing with the wave number
+  game.maxAlive = Math.min(4 + Math.floor(n * 0.9) + (swarm ? 3 : 0), (swarm ? 22 : 18) + Math.floor(n / 3));
+  let count = Math.round(Math.min(5 + n * 2.0, 32 + n) * (swarm ? 1.35 : 1));
+  if (boss) { count = 7 + n; game.maxAlive += 2 + Math.floor(n / 5); game.queue.push(bossFor(n)); }
   const pool = ROSTER.filter((r) => n >= r.from).map((r) => ({ t: r.t, w: r.w * Math.min(1, 0.3 + 0.25 * (n - r.from)) }));
   const total = pool.reduce((a, r) => a + r.w, 0);
   for (let i = 0; i < count; i++) { let r = Math.random() * total, t = pool[0].t; for (const c of pool) { r -= c.w; if (r <= 0) { t = c.t; break; } } game.queue.push(t); }

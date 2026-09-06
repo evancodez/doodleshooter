@@ -85,7 +85,9 @@ export class Gun extends ViewModel {
   }
   update(dt, st) {
     this.fireT -= dt; if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) this.flash.visible = false; }
-    const base = st.aim ? this.adsSpread : this.spread, moveAdd = st.speed * this.moveSpread + (st.grounded ? 0 : 0.01) + (st.sliding ? 0.008 : 0);
+    // moving and flying bloom the shot; aiming down the sights steadies most of that, the scope nearly all of it
+    const base = st.aim ? this.adsSpread : this.spread; let moveAdd = Math.min(st.speed, 24) * this.moveSpread + (st.grounded ? 0 : 0.01) + (st.sliding ? 0.008 : 0);
+    if (st.aim) moveAdd *= this.scope ? 0.03 : 0.3;
     this.spreadCur = damp(this.spreadCur, base + moveAdd, 7, dt);
     const p = this.root.position, r = this.root.rotation;
     if (this.pumpT > 0) {
