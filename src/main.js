@@ -462,7 +462,7 @@ function leaveOnline(reason) {
   game.menu = false; lobby.status = reason || ''; screen = 'online'; showStart();
 }
 async function createLobby(isPublic) {
-  setStatus('opening a lobby…');
+  lobby.quick = false; setStatus('opening a lobby…');
   try { await net.host({ isPublic }); }
   catch (err) { setStatus(friendlyError(err)); return; }
   lobby.isPublic = isPublic; lobby.players.clear(); lobby.players.set(net.id, { name: myName }); lobby.hostId = net.id; lobby.status = '';
@@ -474,10 +474,11 @@ async function joinLobby(code) {
   lobby.isPublic = net.isPublic; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart();
 }
 async function quickPlay() {
-  try { await net.quickJoin({ name: myName }, setStatus); lobby.isPublic = true; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart(); return; }
+  try { await net.quickJoin({ name: myName }, setStatus); lobby.isPublic = true; lobby.quick = true; lobby.status = ''; game.state = 'lobby'; screen = 'lobby'; showStart(); return; }
   catch (err) { if (!/no open public/.test(String(err.message))) { setStatus(friendlyError(err)); return; } }
-  setStatus('no open lobbies · opening a public one for you…');
+  setStatus('no one is out there yet · opening the map for you…');
   await createLobby(true);
+  if (net.isHost) { lobby.quick = true; hostStart(); }
 }
 function friendlyError(err) {
   const m = String(err && err.message || err || ''); if (!m) return 'something went wrong';
@@ -544,7 +545,7 @@ function lobbyHTML() {
       <div class="hint">${lobby.isPublic ? 'this lobby is public: anyone can quick play in, or type the code' : 'private lobby: friends type this code under PLAY ONLINE → JOIN'}</div>
       <div class="plist">${rows.map((p) => `<div class="${p.id === lobby.hostId ? 'host' : ''}${p.id === net.id ? ' me' : ''}"><span>${esc(p.name)}</span><span>${p.id === net.id ? 'you' : ''}</span></div>`).join('')}</div>
       <div class="row">${host ? `<button type="button" class="big" id="startBtn" ${n < 2 ? 'disabled' : ''}>START MATCH</button>` : '<span class="status">waiting for the host to start…</span>'}<button type="button" class="alt" id="leaveBtn">LEAVE</button></div>
-      <div class="status" id="status">${host && n < 2 ? 'waiting for one more player to join' : esc(lobby.status || '')}</div>
+      <div class="status" id="status">${host && n < 2 ? 'waiting for one more player to join' : esc(lobby.status || '')}</div>${!host && lobby.quick ? '<div class="hint">this host is setting up · the match starts when they do</div>' : ''}
     </div>`;
 }
 function wireOnline() {
@@ -676,7 +677,7 @@ function step(now) {
     }
   } else {
     game.time += dt; if (st === 'start' || st === 'dead' || st === 'lobby' || st === 'over') player.idleCam(game.time); effects.update(dt); if (net.active) netUpdate(dt);
-    if (st === 'over') { game.overT += dt; if (net.isHost && game.overT > 8) { net.send('backtolobby', {}); toLobbyScreen(); } }
+    if (st === 'over') { game.overT += dt; if (net.isHost && game.overT > 8) { if (lobby.quick) hostStart(); else { net.send('backtolobby', {}); toLobbyScreen(); } } }
   }
   for (const a of level.animated) a.update(game.time);
   audio.setListener(player.eye, player.right);
