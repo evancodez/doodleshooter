@@ -10,7 +10,7 @@
 // a local dev server gets its own namespace so testing can never wander into a live lobby
 const LOCAL = typeof location !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 const PREFIX = LOCAL ? 'doodledev-' : 'doodledistrict-';
-const PUBLIC_SLOTS = 8;
+const PUBLIC_SLOTS = 16;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const makeCode = () => Array.from({ length: 5 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
 const PEER_OPTS = { debug: 0, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun.cloudflare.com:3478' }] } };
@@ -23,7 +23,7 @@ export class Net {
   constructor() {
     this.peer = null; this.conns = new Map(); this.isHost = false; this.id = null; this.code = null; this.hostId = null;
     this.handlers = new Map(); this.connected = false; this.onPeerJoin = null; this.onPeerLeave = null; this.onDisconnect = null;
-    this.maxPlayers = 8; this.accepting = true; this.stats = { sent: 0, recv: 0 }; this.isPublic = false;
+    this.maxPlayers = 10; this.accepting = true; this.hostName = ''; this.stats = { sent: 0, recv: 0 }; this.isPublic = false;
   }
   get active() { return !!this.peer && this.connected; }
   get peerIds() { return [...this.conns.keys()]; }
@@ -82,7 +82,7 @@ export class Net {
     conn.on('open', () => {
       if (!this.accepting || this.conns.size >= this.maxPlayers - 1) { conn.send({ t: 'refused', d: { reason: this.accepting ? 'that lobby is full' : 'that lobby is closed' } }); setTimeout(() => { try { conn.close(); } catch (e) { /* ignore */ } }, 400); return; }
       const seat = () => { if (this.conns.has(conn.peer)) return; this.conns.set(conn.peer, conn); this._wire(conn); if (this.onPeerJoin) this.onPeerJoin(conn.peer, conn.metadata || {}); };
-      const welcome = { hostId: this.id, code: this.aliasCode || this.code, isPublic: this.isPublic, players: this.conns.size + 1, max: this.maxPlayers, inMatch: !!this.inMatch };
+      const welcome = { hostId: this.id, code: this.aliasCode || this.code, isPublic: this.isPublic, players: this.conns.size + 1, max: this.maxPlayers, inMatch: !!this.inMatch, hostName: this.hostName };
       if (conn.metadata && conn.metadata.probe) {
         conn.send({ t: 'welcome', d: welcome, from: this.id });
         const onData = (msg) => { if (msg && msg.t === 'stay') { conn.off('data', onData); seat(); } };
@@ -138,6 +138,32 @@ export class Net {
     this._adopt(winner.hostId, winner.conn, winner.welcome); this.code = (winner.welcome && winner.welcome.code) || winner.hostId.slice(PREFIX.length); return this.code;
   }
   // knock on several ids at once; the first welcome wins, a refusal or a missing lobby on every one fails
+  // a look at every public lobby: who is hosting, how full, whether a match is on. Nothing is joined.
+  async listLobbies(meta = {}, onStatus = null) {
+    if (this.active) throw new Error('leave the lobby first');
+    const peer = await this._newPeer(null);
+    const ids = []; for (let i = 0; i < PUBLIC_SLOTS; i++) for (const suf of ['', '-1', '-2', '-3']) ids.push(PREFIX + 'PUB' + i + suf);
+    const found = await new Promise((resolve) => {
+      let pending = ids.length, done = false; const attempts = [], offers = []; let gather = null;
+      const settle = () => { if (done) return; done = true; clearTimeout(timer); clearTimeout(gather); peer.off('error', onErr); for (const a of attempts) { try { a.conn.close(); } catch (e) { /* ignore */ } } resolve(offers); };
+      const failOne = (a) => { if (a.done) return; a.done = true; pending--; if (pending <= 0) settle(); };
+      const onErr = (err) => { if (err && err.type === 'peer-unavailable') { const a = attempts.find((x) => x.hostId === idFromError(err)); if (a) failOne(a); } };
+      peer.on('error', onErr);
+      const timer = setTimeout(settle, QUICK_TIMEOUT);
+      const probeMeta = { ...meta, probe: true };
+      for (const hostId of ids) {
+        let conn; try { conn = peer.connect(hostId, { reliable: true, serialization: 'json', metadata: probeMeta }); } catch (e) { pending--; continue; }
+        const a = { conn, hostId, done: false }; attempts.push(a);
+        conn.on('data', (msg) => { if (!msg || a.done) return; if (msg.t === 'welcome' || msg.t === 'refused') { a.done = true; pending--; const d = msg.d || {}; offers.push({ id: hostId.slice(PREFIX.length), code: d.code || hostId.slice(PREFIX.length), players: d.players || 0, max: d.max || 10, inMatch: !!d.inMatch, hostName: d.hostName || '', full: msg.t === 'refused' }); if (onStatus) onStatus(`found ${offers.length}…`); if (pending <= 0) settle(); else if (!gather) gather = setTimeout(settle, 2200); } });
+        conn.on('error', () => failOne(a)); conn.on('close', () => failOne(a));
+      }
+      if (pending <= 0) settle();
+    });
+    try { peer.destroy(); } catch (e) { /* ignore */ }
+    // one lobby can answer on more than one id after a host change; keep the fuller answer per code
+    const byCode = new Map(); for (const o of found) { const k = o.code.replace(/-\d+$/, ''); const prev = byCode.get(k); if (!prev || o.players > prev.players) byCode.set(k, { ...o, code: k }); }
+    return [...byCode.values()].sort((a, b) => b.players - a.players);
+  }
   _knockAny(ids, meta, timeoutMs) {
     return new Promise((resolve, reject) => {
       let pending = ids.length, done = false, lastErr = null; const attempts = [];

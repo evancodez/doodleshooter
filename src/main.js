@@ -456,7 +456,7 @@ async function _migrateHost() {
     if (!ok) { leaveOnline('could not take over the lobby'); return; }
     const mine = lobby.players.get(myId) || { name: myName }; lobby.players.delete(myId); lobby.players.set(net.id, mine);
     const ms = scores.get(myId); scores.delete(myId); if (ms) scores.set(net.id, ms);
-    lobby.hostId = net.id; lobby.code = code; lobby.order = [net.id, ...roster.filter((id) => id !== myId)]; net.accepting = true;
+    lobby.hostId = net.id; lobby.code = code; lobby.order = [net.id, ...roster.filter((id) => id !== myId)]; net.accepting = true; game.clockStarted = clockRunning || matchLeft < FFA_TIME;
     net.onAlias = () => { broadcastLobby(); hud.kill('lobby code ' + base + ' is back', 0); }; net.claimAlias(base);
     if (game.state === 'over') { /* the results stay up; the host timer now runs here */ } else if (wasInMatch) { if (game.state !== 'play' && game.state !== 'dying') game.state = 'play'; refreshScoreHud(); } else { game.state = 'lobby'; screen = 'lobby'; showStart(); }
     broadcastLobby();
@@ -469,6 +469,7 @@ async function _migrateHost() {
   }
 }
 net.on('refused', (d) => leaveOnline(d.reason));
+net.hostName = myName;
 net.onPeerJoin = (from, meta) => {
   const name = String(meta && meta.name || 'doodle').slice(0, 14);
   if (meta && meta.prev && meta.prev !== from) { const sc = scores.get(meta.prev); if (sc) { scores.delete(meta.prev); scores.set(from, sc); } const r = remote.get(meta.prev); if (r) r.dispose(); remote.delete(meta.prev); lobby.players.delete(meta.prev); if (lobby.order) lobby.order = lobby.order.filter((id) => id !== meta.prev); }
@@ -552,9 +553,10 @@ function netUpdate(dt) {
   if (inMatch() && !migrating) for (const [id, r] of remote) { if (r.lastSeen && performance.now() - r.lastSeen > 9000) { if (!net.isHost && id === net.hostId) { net.leave(); migrateHost(); break; } const nm = r.name; removeRemote(id); hud.kill(nm + ' lost connection', 0); if (net.isHost) { const c = net.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } net.conns.delete(id); } net.send('leave', { id }); broadcastLobby(); sendScores(); } } }
   if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing, idle: input.idleSeconds > IDLE_FLAG }), true);
   if (shotQueue.length) net.broadcast('shots', { k: player.weapon.kind, e: shotQueue.splice(0) });
-  const clockOn = inMatch() && !game.over && (remote.size > 0 || !net.isHost && clockRunning);
+  if (net.isHost && inMatch() && remote.size > 0) game.clockStarted = true;
+  const clockOn = inMatch() && !game.over && (net.isHost ? !!game.clockStarted : clockRunning);
   if (inMatch() && !game.over) { if (clockOn) matchLeft = Math.max(0, matchLeft - dt); if (net.isHost) { clockT -= dt; if (clockT <= 0) { clockT = 2; net.send('clock', { left: Math.round(matchLeft), on: clockOn }); } } hud.setTimer(clockOn ? mmss(matchLeft) : 'clock starts when someone joins'); }
-  if (net.isHost && clockOn) { game.matchT += dt; if (game.matchT > FFA_TIME) { const rows = sortedScores(); const w = rows.length ? { id: rows[0][0], name: rows[0][1].name } : { id: net.id, name: myName }; net.send('end', w); endMatch(w); } }
+  if (net.isHost && clockOn) { game.matchT += dt; if (matchLeft <= 0) { const rows = sortedScores(); const w = rows.length ? { id: rows[0][0], name: rows[0][1].name } : { id: net.id, name: myName }; net.send('end', w); endMatch(w); } }
 }
 function leaveOnline(reason) {
   net.leave(); for (const id of [...remote.keys()]) removeRemote(id); lobby.players.clear(); scores.clear(); hud.setBoard(null);
@@ -608,7 +610,7 @@ function wireSettings() {
 }
 function wireName(box) {
   const nb = box.querySelector('#setName'); if (!nb) return;
-  nb.addEventListener('input', (e) => { myName = e.target.value.trim().slice(0, 14) || myName; localStorage.setItem('doodle_name', myName); player.name = myName; });
+  nb.addEventListener('input', (e) => { myName = e.target.value.trim().slice(0, 14) || myName; localStorage.setItem('doodle_name', myName); player.name = myName; net.hostName = myName; });
 }
 function checkpointHTML() {
   if (checkpoint < 5) return '';
@@ -624,17 +626,18 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 
 function mainHTML() {
   return `<h1>DOODLE DISTRICT</h1><h2>a scribbled survival shooter</h2>
-    <div class="mainbtns"><button type="button" class="start" id="soloBtn">START<i>solo · survive the waves</i></button><button type="button" id="onlineBtn">PLAY ONLINE<i>free for all · up to 8 players</i></button></div>
+    <div class="mainbtns"><button type="button" class="start" id="soloBtn">START<i>solo · survive the waves</i></button><button type="button" id="onlineBtn">PLAY ONLINE<i>free for all · up to 10 players</i></button></div>
     ${mapHTML(mapKey, true)}${CONTROLS_HTML}${settingsHTML()}${checkpointHTML()}${best ? `<div class="beststat">best score: ${best}</div>` : ''}`;
 }
 function onlineHTML() {
-  return `<h1>PLAY ONLINE</h1><h2>free for all · first to ${FFA_TARGET} · up to 8 players</h2>
+  return `<h1>PLAY ONLINE</h1><h2>free for all · first to ${FFA_TARGET} · up to 10 players</h2>
     <div class="online" id="online">
       <div class="row"><span>your name</span><input type="text" class="namebox" id="setName" maxlength="14" value="${esc(myName)}"></div>
       <div class="row"><button type="button" class="big" id="quickBtn">QUICK PLAY</button><span class="hint">jumps into an open public lobby, or opens one for you</span></div>
       <div class="row split"><span>or</span></div>
       <div class="row"><button type="button" id="createBtn">CREATE LOBBY</button><div class="radio"><label><input type="radio" name="vis" value="public" ${lobby.isPublic ? 'checked' : ''}> public</label><label><input type="radio" name="vis" value="private" ${lobby.isPublic ? '' : 'checked'}> private · friends only</label></div></div>
       <div class="row"><span>have a code?</span><input type="text" id="codeBox" placeholder="CODE" maxlength="5" autocomplete="off"><button type="button" id="joinBtn">JOIN</button></div>
+      <div class="lobbylist" id="lobbylist"><div class="row"><span>public lobbies</span><button type="button" class="alt" id="refreshBtn">REFRESH</button></div><div class="rows" id="lobbyRows">${lobbyListHTML()}</div></div>
       <div class="status" id="status">${esc(lobby.status || '')}</div>
       ${lobby.rejoinCode ? `<div class="row"><button type="button" class="big" id="rejoinBtn">REJOIN ${esc(lobby.rejoinCode)}</button></div>` : ''}
       <div class="row"><button type="button" class="alt" id="backBtn">BACK</button></div>
@@ -652,6 +655,18 @@ function lobbyHTML() {
       <div class="status" id="status">${esc(lobby.status || '')}</div><div class="hint">anyone can start · ${n < 2 ? 'people can still join once it is running' : n + ' players in'}</div>
     </div>`;
 }
+let lobbyList = null, listBusy = false;
+function lobbyListHTML() {
+  if (listBusy) return '<div class="hint">looking…</div>';
+  if (!lobbyList) return '<div class="hint">press refresh to look for open lobbies</div>';
+  if (!lobbyList.length) return '<div class="hint">no public lobbies right now · quick play opens one</div>';
+  return lobbyList.map((l) => `<div class="lobbyrow"><span class="code">${esc(l.code)}</span><span>${esc(l.hostName || 'someone')}'s lobby</span><span>${l.players}/${l.max}${l.inMatch ? ' · in a match' : ''}</span>${l.full ? '<span class="status">full</span>' : `<button type="button" data-join="${esc(l.code)}">JOIN</button>`}</div>`).join('');
+}
+async function refreshLobbies() {
+  if (listBusy || net.active) return; listBusy = true; const box = hud.el.panel.querySelector('#lobbyRows'); if (box) box.innerHTML = lobbyListHTML();
+  try { lobbyList = await net.listLobbies({ name: myName }); } catch (e) { lobbyList = []; }
+  listBusy = false; const rows = hud.el.panel.querySelector('#lobbyRows'); if (rows) rows.innerHTML = lobbyListHTML();
+}
 function wireOnline() {
   const box = hud.el.panel.querySelector('#online'); if (!box) return;
   box.addEventListener('click', (e) => e.stopPropagation()); box.addEventListener('keydown', (e) => e.stopPropagation());
@@ -661,6 +676,8 @@ function wireOnline() {
   if (q('joinBtn')) { q('joinBtn').addEventListener('click', () => { const c = q('codeBox').value.trim().toUpperCase(); if (!c) { setStatus('type the code your friend gave you'); return; } lockButtons(box); joinLobby(c); }); q('codeBox').addEventListener('keydown', (e) => { if (e.key === 'Enter') q('joinBtn').click(); }); }
   if (q('rejoinBtn')) q('rejoinBtn').addEventListener('click', () => { const c = lobby.rejoinCode; lobby.rejoinCode = null; lockButtons(box); joinLobby(c); });
   if (q('backBtn')) q('backBtn').addEventListener('click', () => { lobby.status = ''; lobby.rejoinCode = null; screen = 'main'; showStart(); });
+  if (q('refreshBtn')) { q('refreshBtn').addEventListener('click', () => refreshLobbies()); if (!lobbyList && !listBusy) refreshLobbies(); }
+  if (q('lobbyRows')) q('lobbyRows').addEventListener('click', (e) => { const b = e.target.closest('button[data-join]'); if (b) { lockButtons(box); joinLobby(b.dataset.join); } });
   wireMap((k) => { if (net.isHost) { lobby.map = k; broadcastLobby(); } });
   if (q('startBtn')) q('startBtn').addEventListener('click', () => { if (net.isHost) hostStart(); else { net.send('startreq', {}); setStatus('asking the host to start…'); } });
   if (q('leaveBtn')) q('leaveBtn').addEventListener('click', () => { lobby.rejoinCode = null; leaveOnline(''); });
@@ -718,7 +735,7 @@ function hostStart() {
   net.send('start', { spawns, map: lobby.map || mapKey }); startMatch(false, spawns[net.id]); sendScores();
 }
 function startMatch(late, spawnIdx) {
-  net.inMatch = true; game.mode = 'ffa'; setArena(true); resetGame(); matchLeft = FFA_TIME; clockT = 0;
+  net.inMatch = true; game.mode = 'ffa'; setArena(true); resetGame(); matchLeft = FFA_TIME; clockT = 0; game.clockStarted = false;
   // nobody sends snapshots in the lobby, so the silence clock restarts here or the sweep would drop everyone
   for (const r of remote.values()) r.lastSeen = performance.now();
   if (!scores.size) for (const [id, p] of lobby.players) scores.set(id, { name: p.name, kills: 0, deaths: 0 });
