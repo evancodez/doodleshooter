@@ -230,11 +230,11 @@ function startWave(n) {
   game.wave = n; game.queue = []; game.spawnT = 2; game.intermission = 0; game.boss = null; hud.setBoss(null, null);
   const boss = n > 0 && n % 5 === 0;
   const allowed = boss || n < 4 ? 1 : n < 6 ? 3 : MODIFIERS.length; const mod = MODIFIERS[Math.floor(Math.random() * allowed)];
-  mod.apply(); hud.setModifier(mod.name);
+  mod.apply(); enemies.mods.damage *= 1.2; hud.setModifier(mod.name);
   const swarm = mod.name.startsWith('SWARM');
-  game.maxAlive = Math.min(3 + Math.floor(n * 0.8) + (swarm ? 3 : 0), swarm ? 20 : 16);
-  let count = Math.round(Math.min(4 + n * 1.7, 28) * (swarm ? 1.35 : 1));
-  if (boss) { count = Math.min(6 + n, 14); game.queue.push(bossFor(n)); }
+  game.maxAlive = Math.min(4 + Math.floor(n * 0.9) + (swarm ? 3 : 0), swarm ? 22 : 18);
+  let count = Math.round(Math.min(5 + n * 2.0, 32) * (swarm ? 1.35 : 1));
+  if (boss) { count = Math.min(7 + n, 16); game.queue.push(bossFor(n)); }
   const pool = ROSTER.filter((r) => n >= r.from).map((r) => ({ t: r.t, w: r.w * Math.min(1, 0.3 + 0.25 * (n - r.from)) }));
   const total = pool.reduce((a, r) => a + r.w, 0);
   for (let i = 0; i < count; i++) { let r = Math.random() * total, t = pool[0].t; for (const c of pool) { r -= c.w; if (r <= 0) { t = c.t; break; } } game.queue.push(t); }

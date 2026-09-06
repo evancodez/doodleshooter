@@ -108,6 +108,15 @@ function buildDistrict(B, arena = false) {
   L.bounds.minX = -P; L.bounds.maxX = P; L.bounds.minZ = -P; L.bounds.maxZ = P;
   box(0, -1, 0, 2 * P + T, 1, 2 * P + T);
   box(0, 0, -P, 2 * P + T, PH, T); box(0, 0, P, 2 * P + T, PH, T); box(-P, 0, 0, T, PH, 2 * P + T); box(P, 0, 0, T, PH, 2 * P + T);
+  if (!arena) {
+    // solo: the walls carry on upward unseen and unhookable, so their tops are not a place to camp, and a lid closes the sky
+    const NG = { noNav: true, noGrapple: true };
+    collider(0, PH, -P, 2 * P + T, 40, T, NG); collider(0, PH, P, 2 * P + T, 40, T, NG); collider(-P, PH, 0, T, 40, 2 * P + T, NG); collider(P, PH, 0, T, 40, 2 * P + T, NG);
+    collider(0, 56, 0, 2 * P + 40, 8, 2 * P + 40, NG);
+    const R = 96, C = -22;
+    for (let k = 0; k < 6; k++) { const g = new THREE.TorusGeometry(R, 0.5, 5, 80, Math.PI); g.rotateY(k * Math.PI / 6); g.translate(0, C, 0); addGeo(g, INK.BLUE); }
+    for (const h of [30, 46, 60, 70]) { const r = Math.sqrt(R * R - (h - C) * (h - C)); const g = new THREE.TorusGeometry(r, 0.4, 5, 96); g.rotateX(Math.PI / 2); g.translate(0, h, 0); addGeo(g, INK.BLUE); }
+  }
   // ledges / balconies on the perimeter (grapple + stand)
   const ledges = [[-30, -E, 8, 1.6], [30, -E, 8, 1.6], [-E, 40, 1.6, 8], [E, -10, 1.6, 8], [-E, -30, 1.6, 6], [E, 35, 1.6, 6], [10, E, 8, 1.6], [-40, E, 6, 1.6]];
   for (const [x, z, w, d] of ledges) {
