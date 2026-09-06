@@ -22,12 +22,12 @@ export class Input {
     this.mouseSens = 0.0022; this.padSensX = 3.4; this.padSensY = 2.6;
     this.usingGamepad = false; this.gamepadIndex = -1; this.padHoldTime = 0;
     this.pointerLocked = false; this.anyInput = false; this.lastPadButtons = [];
-    this.onLockChange = null; this.onAnyInput = null;
+    this.onLockChange = null; this.onAnyInput = null; this.lastActive = performance.now();
     this.invertY = false; this.onDeviceChange = null;
 
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
-      const a = KEYMAP[e.code]; if (a) { this.keys[a] = true; if (this.usingGamepad && this.onDeviceChange) this.onDeviceChange(false); this.usingGamepad = false; }
+      this.lastActive = performance.now(); const a = KEYMAP[e.code]; if (a) { this.keys[a] = true; if (this.usingGamepad && this.onDeviceChange) this.onDeviceChange(false); this.usingGamepad = false; }
       if (!e.shiftKey) this.keys.sprint = false;
       if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
       this.anyInput = true;
@@ -41,12 +41,12 @@ export class Input {
       let dx = e.movementX, dy = e.movementY;
       // guard against pointer-lock spikes
       if (Math.abs(dx) > 400) dx = 0; if (Math.abs(dy) > 400) dy = 0;
-      this.mx += dx; this.my += dy; this.usingGamepad = false;
+      this.mx += dx; this.my += dy; this.usingGamepad = false; this.lastActive = performance.now();
     });
     document.addEventListener('mousedown', (e) => {
       const a = MOUSEMAP[e.button]; if (a) this.mouseBtns[a] = true;
       if (this.usingGamepad && this.onDeviceChange) this.onDeviceChange(false);
-      this.usingGamepad = false; this.anyInput = true;
+      this.usingGamepad = false; this.anyInput = true; this.lastActive = performance.now();
       if (e.button === 1 || e.button === 3 || e.button === 4) e.preventDefault();
     });
     document.addEventListener('mouseup', (e) => { const a = MOUSEMAP[e.button]; if (a) this.mouseBtns[a] = false; });
@@ -111,7 +111,7 @@ export class Input {
         const pressed = b.pressed || b.value > 0.35;
         if (pressed) { s[PADMAP[idx]] = true; padS[PADMAP[idx]] = true; padActive = true; }
       }
-      if (padActive) { if (!this.usingGamepad && this.onDeviceChange) this.onDeviceChange(true); this.usingGamepad = true; this.anyInput = true; }
+      if (padActive) { if (!this.usingGamepad && this.onDeviceChange) this.onDeviceChange(true); this.usingGamepad = true; this.anyInput = true; this.lastActive = performance.now(); }
       this._pad = pad;
     } else this._pad = null;
     this.padPrev = this.padState; this.padState = padS;
@@ -122,6 +122,7 @@ export class Input {
   }
 
   down(a) { return !!this.state[a]; }
+  get idleSeconds() { return (performance.now() - this.lastActive) / 1000; }
   pressed(a) { return (!!this.state[a] && !this.prev[a]) || (!!this.padState[a] && !this.padPrev[a]); }
   released(a) { return !this.state[a] && !!this.prev[a]; }
   consume(a) { this.state[a] = false; }

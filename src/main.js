@@ -483,13 +483,31 @@ net.on('shots', (d, from) => {
 net.on('cut', () => { if (player.grapple.state !== 'idle') { player.detachGrapple(false); effects.strokeBurst(player.center, INK.ORANGE, 8, 4, { life: 0.25, size: 0.03 }); hud.tip('your rope got cut', 1.3); input.rumble(0.5, 0.3, 80); } });
 net.on('score', (rows) => { if (!net.isHost) applyScores(rows); });
 
+// ---- idle players: a warning, then out; a lobby with nobody active in it shuts down ----
+const IDLE_FLAG = 30, IDLE_MATCH = 90, IDLE_LOBBY = 240, IDLE_WARN = 20;
+let idleWarned = false, idleCheckT = 0;
+function idleUpdate(dt) {
+  if (!net.active) { idleWarned = false; return; }
+  idleCheckT -= dt; if (idleCheckT > 0) return; idleCheckT = 1;
+  const limit = inMatch() ? IDLE_MATCH : IDLE_LOBBY; const idle = input.idleSeconds;
+  const othersActive = [...remote.values()].some((r) => !r.idle);
+  // a host that still has active players stays; kicking it would end their match
+  const canDrop = !net.isHost || !othersActive;
+  if (idle > limit - IDLE_WARN && !idleWarned && canDrop) { idleWarned = true; hud.message('STILL THERE?', 'move or you get kicked for inactivity', 3); audio.empty(); }
+  if (idle <= limit - IDLE_WARN) idleWarned = false;
+  if (idle > limit && canDrop) { leaveOnline(net.isHost ? 'lobby closed: everyone was idle' : 'kicked for inactivity'); return; }
+  // the host also clears out a client that has sat idle past the limit, in case its tab cannot do it itself
+  if (net.isHost) for (const [id, r] of remote) if (r.idle && r.idleSince && performance.now() / 1000 - r.idleSince > limit - IDLE_FLAG + 15) { net.sendTo(id, 'kick', { reason: 'kicked for inactivity' }); const c = net.conns.get(id); setTimeout(() => { try { c && c.close(); } catch (e) { /* ignore */ } }, 500); }
+}
+net.on('kick', (d) => leaveOnline(d && d.reason || 'kicked'));
 let syncTick = 0;
 function netUpdate(dt) {
+  idleUpdate(dt);
   if (!net.active) return; const now = performance.now() / 1000; syncTick++;
   for (const r of remote.values()) r.update(dt, now);
   // a connection that died without saying so leaves a figure standing around: drop anyone silent too long
   if (inMatch()) for (const [id, r] of remote) { if (r.lastSeen && performance.now() - r.lastSeen > 9000) { const nm = r.name; removeRemote(id); hud.kill(nm + ' lost connection', 0); if (net.isHost) { const c = net.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } net.conns.delete(id); } net.send('leave', { id }); broadcastLobby(); sendScores(); } } }
-  if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing }), true);
+  if (syncTick % 3 === 0 && inMatch()) net.send('ps', encodeLocal(player, player.weaponIndex, { firing: player.firing, idle: input.idleSeconds > IDLE_FLAG }), true);
   if (shotQueue.length) net.broadcast('shots', { k: player.weapon.kind, e: shotQueue.splice(0) });
   if (net.isHost && inMatch() && !game.over) { game.matchT += dt; if (game.matchT > FFA_TIME) { const rows = sortedScores(); const w = rows.length ? { id: rows[0][0], name: rows[0][1].name } : { id: net.id, name: myName }; net.send('end', w); endMatch(w); } }
 }
