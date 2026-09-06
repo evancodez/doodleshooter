@@ -16,7 +16,7 @@ const HIT = [['head', 0.3], ['torso', 0.33], ['hips', 0.2], ['armL', 0.11], ['ar
 export function encodeLocal(P, weaponIndex, extra = {}) {
   const b = P.body; const g = P.grapple; const grappling = g && g.state !== 'idle';
   const out = [+b.pos.x.toFixed(2), +b.pos.y.toFixed(2), +b.pos.z.toFixed(2), +P.yaw.toFixed(2), +P.pitch.toFixed(2), weaponIndex,
-    (P.crouching ? 1 : 0) | (P.sliding ? 2 : 0) | (P.isBlocking ? 4 : 0) | (P._aiming ? 8 : 0) | (b.onGround ? 16 : 0) | (extra.firing ? 32 : 0) | (P.alive ? 64 : 0) | (grappling ? 128 : 0) | (P.parryWindow ? 256 : 0) | (extra.idle ? 512 : 0),
+    (P.crouching ? 1 : 0) | (P.sliding ? 2 : 0) | (P.isBlocking ? 4 : 0) | (P._aiming ? 8 : 0) | (b.onGround ? 16 : 0) | (extra.firing ? 32 : 0) | (P.alive ? 64 : 0) | (grappling ? 128 : 0) | (P.parryWindow ? 256 : 0) | (extra.idle ? 512 : 0) | (extra.untouched ? 1024 : 0),
     Math.round(P.hp), +b.vel.x.toFixed(1), +b.vel.y.toFixed(1), +b.vel.z.toFixed(1)];
   if (grappling) out.push(+g.hook.x.toFixed(1), +g.hook.y.toFixed(1), +g.hook.z.toFixed(1));
   return out;
@@ -25,7 +25,7 @@ export function encodeLocal(P, weaponIndex, extra = {}) {
 export class RemotePlayer {
   constructor(ctx, id, name, team, ink) {
     this.ctx = ctx; this.id = id; this.name = name || 'doodle'; this.team = team; this.ink = ink;
-    this.isLocal = false; this.alive = true; this.parryWindow = false; this.idle = false; this.idleSince = 0; this.hp = 100; this.maxHp = 100; this.speed = 0; this.weaponIndex = 0;
+    this.isLocal = false; this.alive = true; this.parryWindow = false; this.idle = false; this.idleSince = 0; this.untouched = false; this.hp = 100; this.maxHp = 100; this.speed = 0; this.weaponIndex = 0;
     this.body = { pos: new THREE.Vector3(0, -50, 0), vel: new THREE.Vector3(), halfW: 0.35, height: 1.75, onGround: true };
     this.center = new THREE.Vector3(); this.eye = new THREE.Vector3(); this.forward = new THREE.Vector3(0, 0, -1); this.right = new THREE.Vector3(1, 0, 0);
     this.yaw = 0; this.pitch = 0; this.crouching = false; this.sliding = false; this.blocking = false; this.aiming = false; this.firing = false;
@@ -79,7 +79,7 @@ export class RemotePlayer {
     this.crouching = !!(f & 1); this.sliding = !!(f & 2); this.blocking = !!(f & 4); this.aiming = !!(f & 8); this.body.onGround = !!(f & 16); this.firing = !!(f & 32);
     const wasAlive = this.alive; this.alive = !!(f & 64); this.hp = snap[7];
     if (snap.length > 10) this.vel.set(snap[8], snap[9], snap[10]); else this.vel.set(0, 0, 0);
-    this.grappling = !!(f & 128) && snap.length > 13; if (this.grappling) this.gPoint.set(snap[11], snap[12], snap[13]); this.parryWindow = !!(f & 256); const idle = !!(f & 512); if (idle && !this.idle) this.idleSince = t; this.idle = idle;
+    this.grappling = !!(f & 128) && snap.length > 13; if (this.grappling) this.gPoint.set(snap[11], snap[12], snap[13]); this.parryWindow = !!(f & 256); const idle = !!(f & 512); if (idle && !this.idle) this.idleSince = t; this.idle = idle; this.untouched = !!(f & 1024);
     if (wasAlive && !this.alive) this.deadT = 0;
     if (this.alive && this.corpse) { this._buildModel(); this.snapA = null; this.body.pos.copy(this.snapB.p); }
     if (this.root && !this.root.visible) { this.body.pos.copy(this.snapB.p); this.root.visible = true; }
