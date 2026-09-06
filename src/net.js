@@ -87,7 +87,7 @@ export class Net {
         conn.send({ t: 'welcome', d: welcome, from: this.id });
         const onData = (msg) => { if (msg && msg.t === 'stay') { conn.off('data', onData); seat(); } };
         conn.on('data', onData);
-      } else { seat(); conn.send({ t: 'welcome', d: welcome, from: this.id }); }
+      } else { conn.send({ t: 'welcome', d: welcome, from: this.id }); seat(); }
     });
   }
   // after a host transfer the lobby lives on a generation code; keep trying to open the original code
